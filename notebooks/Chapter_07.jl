@@ -7,6 +7,12 @@ using InteractiveUtils
 # ╔═╡ d9015225-b635-42ad-ae96-fe7772a031b7
 using Pkg, DrWatson
 
+# ╔═╡ b5f71893-a54a-4b2d-824c-27593a8dd781
+begin
+  using PlutoUI
+  TableOfContents()
+end
+
 # ╔═╡ 727e041b-fe08-4f7d-ad19-e3c57772c967
 begin
 	using Optim
@@ -23,11 +29,81 @@ begin
 	using Logging
 end
 
+# ╔═╡ d1e3241c-ae3c-4e7f-b842-6c5c79186bd4
+parentmodule(default)
+
 # ╔═╡ 078fdb65-5bd6-4b0d-b672-617f5912480d
 begin
 	default(labels=false)
-	Logging.disable_logging(Logging.Warn);
+	#Logging.disable_logging(Logging.Warn);
 end;
+
+# ╔═╡ f8682d46-7ee7-4fd2-a64f-c783360572e1
+map(1:20) do i
+    R = i+100
+    T = R^2
+    md"hello $R and $T"
+end
+
+# ╔═╡ 646fc015-eb4f-46e0-b483-1af49c9660bb
+md"No stdoutput without map(1:20)"
+
+# ╔═╡ f00222ef-b0d3-4464-87ef-6da1adbb54ac
+for i in 1:20
+    R = i+100
+    T = R^2
+    md"hello $R and $T"
+end
+
+# ╔═╡ c199328f-81af-4e7c-8fa9-fac5fbeedc8a
+md"the following for-loop will return and output the last iteration"
+
+# ╔═╡ 72bdf4a7-9563-4495-9f0c-72b43a76e8a8
+let
+    x =  nothing
+    for i in 1:20
+        R = i+100
+        T = R^2
+        # something
+        x = md"hello $R and $T"
+    end
+    x
+end
+
+# ╔═╡ 4ace5da6-a36e-4d92-856d-2409238ccaa1
+macro with_stdout(expr)
+        escaped_expr = esc(expr)
+	return quote
+		stdout_bk = stdout
+		rd, wr = redirect_stdout()
+		result = ($escaped_expr)
+		redirect_stdout(stdout_bk)
+		close(wr)
+		print_result = read(rd, String) |> Text
+		(result, print_result)
+	end
+end
+
+# ╔═╡ 41e60936-8367-4b04-9bb8-df9fb517a51f
+@with_stdout println("I am");
+
+# ╔═╡ 93e9248c-2c0b-474c-aa9f-e9c66dcb6a00
+@time println("I am");
+
+# ╔═╡ 4c26c5a1-55e2-4007-9085-96ee776e7ebe
+macro seeprints(expr)
+	quote
+		stdout_bk = stdout
+		rd, wr = redirect_stdout()
+		$expr
+		redirect_stdout(stdout_bk)
+		close(wr)
+		read(rd, String) |> Text
+	end
+end
+
+# ╔═╡ ee759da7-cc6d-4fd2-8630-e29b323027c4
+@seeprints println("I am");
 
 # ╔═╡ 5141dfdf-490d-479e-ac58-63c929ae8fd1
 md"## 7.1 The problem with parameters."
@@ -67,12 +143,48 @@ md"### Code 7.3"
     brain_std ~ MvNormal(μ, exp(log_σ))
 end
 
-# ╔═╡ 2aafe78c-b1b1-4963-ad89-dbe09b546d96
-@time begin
+# ╔═╡ c47284e8-7686-49c8-8d10-2a8460f673cd
+begin
 	@time m7_1_ch = sample(model_m7_1(d.mass_std, d.brain_std), NUTS(), 1000)
 	m7_1 = DataFrame(m7_1_ch)
 	@time describe(m7_1)
 end
+
+
+# ╔═╡ 0479f514-1b96-4115-beaa-35a96c40a1d7
+m7_1_ch
+
+# ╔═╡ 9a1a6b7f-8810-4a14-910a-2ff422de4289
+begin
+	typeof(m7_1_ch)
+end
+
+# ╔═╡ 788ea3c8-d94d-4201-b860-3f085f18f9e2
+m7_1_ch.info
+
+# ╔═╡ 3914cc70-e0c2-4b91-a456-5a301597e0fe
+begin
+@show m7_1_ch.name_map
+m7_1_ch.value
+end
+
+# ╔═╡ 1efdafc3-497f-434e-9a16-97636a4cfc4b
+histogram(m7_1_ch[:log_density])
+
+# ╔═╡ 5868fb4a-eb92-46c4-a753-6e9459b0a006
+histogram(m7_1_ch[:acceptance_rate])
+
+# ╔═╡ 358b7b46-129a-464d-86f0-2a1a8da10f3d
+histogram(m7_1_ch[:hamiltonian_energy])
+
+# ╔═╡ 8ddad81f-78fd-4a48-953c-d3480d6a3466
+histogram(m7_1_ch[:hamiltonian_energy_error])
+
+# ╔═╡ e64277de-23c5-4ec9-ba57-ce39a39add2a
+histogram(m7_1_ch[:max_hamiltonian_energy_error])
+
+# ╔═╡ 485d49f2-e36b-4a22-aecb-84a51b8075e5
+m7_1_ch[:nom_step_size]
 
 # ╔═╡ 45122674-c5d2-4f61-af03-c74482618e90
 md"### Code 7.4"
@@ -150,9 +262,9 @@ end
 
 # ╔═╡ fa9522ce-d91d-4cbd-9a1a-fe63fd2b7d15
 begin
-	m7_2_ch = sample(model_m7_2(d.mass_std, d.brain_std), NUTS(), 10000)
-	m7_2 = DataFrame(m7_2_ch)
-	describe(m7_2)
+	@time m7_2_ch = sample(model_m7_2(d.mass_std, d.brain_std), NUTS(), 10000)
+	@time m7_2 = DataFrame(m7_2_ch)
+	@time describe(m7_2)
 end
 
 # ╔═╡ 41fc983a-9209-4ff5-b9fa-5798c7d387af
@@ -178,15 +290,15 @@ end
 
 # ╔═╡ bf763ccd-2c72-4529-b6ac-747f39f1b9cf
 begin
-	m7_3_ch = sample(model_m7_n(d.mass_std, d.brain_std, degree=3), NUTS(), 1000)
-	m7_3 = DataFrame(m7_3_ch)
+	@time m7_3_ch = sample(model_m7_n(d.mass_std, d.brain_std, degree=3), NUTS(), 1000)
+	@time m7_3 = DataFrame(m7_3_ch)
 	describe(m7_3)
 end
 
 # ╔═╡ ef2e821a-d947-40e1-9855-79819aec5dbb
 begin
-	m7_4_ch = sample(model_m7_n(d.mass_std, d.brain_std, degree=4), NUTS(), 1000)
-	m7_4 = DataFrame(m7_4_ch)
+	@time m7_4_ch = sample(model_m7_n(d.mass_std, d.brain_std, degree=4), NUTS(), 1000)
+	@time m7_4 = DataFrame(m7_4_ch)
 	describe(m7_4)
 end
 
@@ -334,7 +446,32 @@ md"### Code 7.12"
 p = [0.3, 0.7];
 
 # ╔═╡ 3a3537ec-039a-434d-a7d4-15ab41eb97d8
--sum(p .* log.(p))
+function calc_entropy_given_p(p)
+	-sum(p .* log.(p))
+end
+
+# ╔═╡ fd90af56-427c-47a6-aa01-ef7ee6399a40
+@time calc_entropy_given_p(p)
+
+# ╔═╡ 421a7308-637f-4e55-969d-3afa26cbfc6c
+function plot_entropy_for_binomial_varying_p()
+	let p0_vec = 0:0.01:1;
+		entropy_vec = similar(p0_vec);
+		for i ∈ 1:length(p0_vec)
+			entropy_vec[i] = calc_entropy_given_p([p0_vec[i], 1-p0_vec[i]])
+		end
+		scatter(p0_vec, entropy_vec; title="Entropy for a binomial(p)", xlabel="p");
+	end
+end
+
+# ╔═╡ 0caec6f7-af0d-4d89-b682-763c1e14af93
+@time plot_entropy_for_binomial_varying_p()
+
+# ╔═╡ 63ca60f4-f5c6-4928-86bb-f6d131654bc4
+@time plot_entropy_for_binomial_varying_p()
+
+# ╔═╡ adb89664-66d8-4dbb-8f42-6043dcc09109
+plot_entropy_for_binomial_varying_p()
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -347,6 +484,7 @@ GLM = "38e38edf-8417-5370-95a0-9cbb8c7f171a"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatisticalRethinking = "2d09df54-9d0f-5258-8220-54c2a3d4fbee"
 StatisticalRethinkingPlots = "e1a513d0-d9d9-49ff-a6dd-9d2e9db473da"
@@ -361,6 +499,7 @@ DataFrames = "~1.6.1"
 DrWatson = "~2.13.0"
 GLM = "~1.9.0"
 Optim = "~1.8.0"
+PlutoUI = "~0.7.23"
 StatisticalRethinking = "~4.7.4"
 StatisticalRethinkingPlots = "~1.1.0"
 StatsBase = "~0.34.2"
@@ -374,7 +513,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.2"
 manifest_format = "2.0"
-project_hash = "88da11bfd4a3b8485f1d43e4643cc3188ccf2bc8"
+project_hash = "8045d00b6aa1cffa3fcd13fa43e4113dfd371d8f"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "41c37aa88889c171f1300ceac1313c06e891d245"
@@ -408,6 +547,12 @@ deps = ["AbstractMCMC", "DensityInterface", "Random", "Setfield"]
 git-tree-sha1 = "9774889eac07c2e342e547b5c5c8ae5a2ce5c80b"
 uuid = "7a57a42e-76ec-4ea3-a279-07e840d6d9cf"
 version = "0.7.1"
+
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "0f748c81756f2e5e6854298f11ad8b2dfae6911a"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.3.0"
 
 [[deps.AbstractTrees]]
 git-tree-sha1 = "2d9c9a55f9c93e8887ad391fbae72f8ef55e1177"
@@ -1233,6 +1378,18 @@ git-tree-sha1 = "f218fe3736ddf977e0e772bc9a586b2383da2685"
 uuid = "34004b35-14d8-5ef3-9330-4cdb6864b03a"
 version = "0.3.23"
 
+[[deps.Hyperscript]]
+deps = ["Test"]
+git-tree-sha1 = "8d511d5b81240fc8e6802386302675bdf47737b9"
+uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
+version = "0.0.4"
+
+[[deps.HypertextLiteral]]
+deps = ["Tricks"]
+git-tree-sha1 = "7134810b1afce04bbc1045ca1985fbe81ce17653"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.5"
+
 [[deps.IOCapture]]
 deps = ["Logging", "Random"]
 git-tree-sha1 = "8b72179abc660bfab5e28472e019392b97d0985c"
@@ -1914,6 +2071,12 @@ version = "1.40.2"
     ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
+[[deps.PlutoUI]]
+deps = ["AbstractPlutoDingetjes", "Base64", "Dates", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "UUIDs"]
+git-tree-sha1 = "5152abbdab6488d5eec6a01029ca6697dff4ec8f"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.23"
+
 [[deps.PooledArrays]]
 deps = ["DataAPI", "Future"]
 git-tree-sha1 = "36d8b4b899628fb92c2749eb488d884a926614d3"
@@ -2458,6 +2621,11 @@ version = "0.4.80"
     OnlineStatsBase = "925886fa-5bf2-5e8e-b522-a9147a512338"
     Referenceables = "42d2dcc6-99eb-4e98-b66c-637b7d73030e"
 
+[[deps.Tricks]]
+git-tree-sha1 = "eae1bb484cd63b36999ee58be2de6c178105112f"
+uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
+version = "0.1.8"
+
 [[deps.Turing]]
 deps = ["ADTypes", "AbstractMCMC", "AdvancedHMC", "AdvancedMH", "AdvancedPS", "AdvancedVI", "BangBang", "Bijectors", "DataStructures", "Distributions", "DistributionsAD", "DocStringExtensions", "DynamicPPL", "EllipticalSliceSampling", "ForwardDiff", "Libtask", "LinearAlgebra", "LogDensityProblems", "LogDensityProblemsAD", "MCMCChains", "NamedArrays", "Printf", "Random", "Reexport", "Requires", "SciMLBase", "Setfield", "SpecialFunctions", "Statistics", "StatsAPI", "StatsBase", "StatsFuns"]
 git-tree-sha1 = "afb5bb484e67bb4179507baff464da9c4d18b307"
@@ -2856,8 +3024,20 @@ version = "1.4.1+1"
 
 # ╔═╡ Cell order:
 # ╠═d9015225-b635-42ad-ae96-fe7772a031b7
+# ╠═b5f71893-a54a-4b2d-824c-27593a8dd781
 # ╠═727e041b-fe08-4f7d-ad19-e3c57772c967
+# ╠═d1e3241c-ae3c-4e7f-b842-6c5c79186bd4
 # ╠═078fdb65-5bd6-4b0d-b672-617f5912480d
+# ╠═f8682d46-7ee7-4fd2-a64f-c783360572e1
+# ╠═646fc015-eb4f-46e0-b483-1af49c9660bb
+# ╠═f00222ef-b0d3-4464-87ef-6da1adbb54ac
+# ╠═c199328f-81af-4e7c-8fa9-fac5fbeedc8a
+# ╠═72bdf4a7-9563-4495-9f0c-72b43a76e8a8
+# ╠═4ace5da6-a36e-4d92-856d-2409238ccaa1
+# ╠═41e60936-8367-4b04-9bb8-df9fb517a51f
+# ╠═93e9248c-2c0b-474c-aa9f-e9c66dcb6a00
+# ╠═4c26c5a1-55e2-4007-9085-96ee776e7ebe
+# ╠═ee759da7-cc6d-4fd2-8630-e29b323027c4
 # ╟─5141dfdf-490d-479e-ac58-63c929ae8fd1
 # ╟─611c3828-f01f-4721-830b-736b28620e7e
 # ╠═ad511be2-fd88-4aba-a830-21e242d994f1
@@ -2865,7 +3045,17 @@ version = "1.4.1+1"
 # ╠═5c7f1f26-02ac-4325-a06c-8c26c75e6cf4
 # ╟─5a2f79ca-2d3e-4cd4-9de9-7c7e283a5052
 # ╠═94b5539b-4374-40b8-9501-8d3df49f20c3
-# ╠═2aafe78c-b1b1-4963-ad89-dbe09b546d96
+# ╠═c47284e8-7686-49c8-8d10-2a8460f673cd
+# ╠═0479f514-1b96-4115-beaa-35a96c40a1d7
+# ╠═9a1a6b7f-8810-4a14-910a-2ff422de4289
+# ╠═788ea3c8-d94d-4201-b860-3f085f18f9e2
+# ╠═3914cc70-e0c2-4b91-a456-5a301597e0fe
+# ╠═1efdafc3-497f-434e-9a16-97636a4cfc4b
+# ╠═5868fb4a-eb92-46c4-a753-6e9459b0a006
+# ╠═358b7b46-129a-464d-86f0-2a1a8da10f3d
+# ╠═8ddad81f-78fd-4a48-953c-d3480d6a3466
+# ╠═e64277de-23c5-4ec9-ba57-ce39a39add2a
+# ╠═485d49f2-e36b-4a22-aecb-84a51b8075e5
 # ╟─45122674-c5d2-4f61-af03-c74482618e90
 # ╠═3b7ca48f-078f-4eef-9d0c-fa8724e711d3
 # ╠═40c173f3-3dbb-4907-9188-632d34b3d7cf
@@ -2906,5 +3096,10 @@ version = "1.4.1+1"
 # ╟─e8765238-eec6-41c0-9c8c-148c9e51aad9
 # ╠═fd1f8ae2-6839-4f7e-9141-66824490df72
 # ╠═3a3537ec-039a-434d-a7d4-15ab41eb97d8
+# ╠═fd90af56-427c-47a6-aa01-ef7ee6399a40
+# ╠═421a7308-637f-4e55-969d-3afa26cbfc6c
+# ╠═0caec6f7-af0d-4d89-b682-763c1e14af93
+# ╠═63ca60f4-f5c6-4928-86bb-f6d131654bc4
+# ╠═adb89664-66d8-4dbb-8f42-6043dcc09109
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
