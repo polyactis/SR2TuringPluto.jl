@@ -29,24 +29,17 @@ begin
 	using Logging
 end
 
-# ╔═╡ d1e3241c-ae3c-4e7f-b842-6c5c79186bd4
-parentmodule(default)
+# ╔═╡ ac0b951d-5260-40f5-86ba-1664f264ae21
+md"# Chapter 7 Ulysses' Compass"
+
+# ╔═╡ 733dae80-07da-4ac9-9b58-517c0c2f6250
+versioninfo()
 
 # ╔═╡ 078fdb65-5bd6-4b0d-b672-617f5912480d
 begin
-	default(labels=false)
+	Plots.default(labels=false)
 	#Logging.disable_logging(Logging.Warn);
 end;
-
-# ╔═╡ f8682d46-7ee7-4fd2-a64f-c783360572e1
-map(1:20) do i
-    R = i+100
-    T = R^2
-    md"hello $R and $T"
-end
-
-# ╔═╡ 646fc015-eb4f-46e0-b483-1af49c9660bb
-md"No stdoutput without map(1:20)"
 
 # ╔═╡ f00222ef-b0d3-4464-87ef-6da1adbb54ac
 for i in 1:20
@@ -56,7 +49,7 @@ for i in 1:20
 end
 
 # ╔═╡ c199328f-81af-4e7c-8fa9-fac5fbeedc8a
-md"the following for-loop will return and output the last iteration"
+md"- the following for-loop will return and output the last iteration. but you can run it differently via map(...) do ... end"
 
 # ╔═╡ 72bdf4a7-9563-4495-9f0c-72b43a76e8a8
 let
@@ -68,6 +61,16 @@ let
         x = md"hello $R and $T"
     end
     x
+end
+
+# ╔═╡ 646fc015-eb4f-46e0-b483-1af49c9660bb
+md"- Output of the next snippet is possible due to map(1:20)"
+
+# ╔═╡ f8682d46-7ee7-4fd2-a64f-c783360572e1
+map(1:20) do i
+    R = i+100
+    T = R^2
+    md"hello $R and $T"
 end
 
 # ╔═╡ 4ace5da6-a36e-4d92-856d-2409238ccaa1
@@ -3023,16 +3026,17 @@ version = "1.4.1+1"
 """
 
 # ╔═╡ Cell order:
+# ╟─ac0b951d-5260-40f5-86ba-1664f264ae21
+# ╠═733dae80-07da-4ac9-9b58-517c0c2f6250
 # ╠═d9015225-b635-42ad-ae96-fe7772a031b7
 # ╠═b5f71893-a54a-4b2d-824c-27593a8dd781
 # ╠═727e041b-fe08-4f7d-ad19-e3c57772c967
-# ╠═d1e3241c-ae3c-4e7f-b842-6c5c79186bd4
 # ╠═078fdb65-5bd6-4b0d-b672-617f5912480d
-# ╠═f8682d46-7ee7-4fd2-a64f-c783360572e1
-# ╠═646fc015-eb4f-46e0-b483-1af49c9660bb
 # ╠═f00222ef-b0d3-4464-87ef-6da1adbb54ac
-# ╠═c199328f-81af-4e7c-8fa9-fac5fbeedc8a
+# ╟─c199328f-81af-4e7c-8fa9-fac5fbeedc8a
 # ╠═72bdf4a7-9563-4495-9f0c-72b43a76e8a8
+# ╟─646fc015-eb4f-46e0-b483-1af49c9660bb
+# ╠═f8682d46-7ee7-4fd2-a64f-c783360572e1
 # ╠═4ace5da6-a36e-4d92-856d-2409238ccaa1
 # ╠═41e60936-8367-4b04-9bb8-df9fb517a51f
 # ╠═93e9248c-2c0b-474c-aa9f-e9c66dcb6a00
