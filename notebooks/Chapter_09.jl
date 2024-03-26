@@ -346,7 +346,7 @@ end
 md"#### One chain will be produced by default"
 
 # ╔═╡ 76782d05-9e32-424c-a206-8081e0fdd146
-@time m9_1 = sample(model_m8_3(dd.rugged_std, dd.cid,  dd.log_gdp_std), NUTS(), 1000);
+@time m9_1 = sample(model_m8_3(dd.rugged_std, dd.cid,  dd.log_gdp_std, r̄), NUTS(), 1000);
 
 # ╔═╡ e8dd780e-b94d-413c-9b0b-0476817b2094
 md"### Code 9.15 m9_1 estimates"
@@ -361,7 +361,7 @@ md"### Code 9.16 Sample 4 chains simultaneously"
 md"#### For this to use multiple cores, julia has to be started with `--threads 4` parameter, otherwise chains will be sampled sequentially"
 
 # ╔═╡ 3f4a3b7c-2db7-4d7b-800a-c14968a02855
-@time m9_1_4 = sample(model_m8_3(dd.rugged_std, dd.cid,  dd.log_gdp_std), NUTS(), MCMCThreads(), 500, 4);
+@time m9_1_4 = sample(model_m8_3(dd.rugged_std, dd.cid,  dd.log_gdp_std, r̄), NUTS(), MCMCThreads(), 500, 4);
 
 # ╔═╡ 2d2aa3ef-8fb7-4c69-8869-42e1939dc950
 md"### Code 9.17 Combined chain results"
