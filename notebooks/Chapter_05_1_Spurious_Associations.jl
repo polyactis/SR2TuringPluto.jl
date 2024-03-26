@@ -52,8 +52,8 @@ md"### Set defaults for plot and logging."
 
 # ╔═╡ 001d0e14-cc62-415a-8a07-90aa69d426c6
 begin
-	default(label=false)
-	Logging.disable_logging(Logging.Warn);
+	Plots.default(label=false)
+	#Logging.disable_logging(Logging.Warn);
 end;
 
 # ╔═╡ d7e8f8b2-63c6-4e2b-a660-da89f55426ac

@@ -28,8 +28,8 @@ end
 
 # ╔═╡ 8720cc1f-58a0-4a70-9497-480456b26f85
 begin
-	default(labels=false)
-	Logging.disable_logging(Logging.Warn);
+	Plots.default(labels=false)
+	#Logging.disable_logging(Logging.Warn);
 end
 
 # ╔═╡ fdbf8fe2-7e99-4da6-bd8d-6a21bb68bc71

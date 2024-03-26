@@ -39,8 +39,8 @@ html"""
 
 # ╔═╡ 22f28b65-a270-4778-8933-57459e1249c7
 begin
-	default(label=false)
-	Logging.disable_logging(Logging.Warn);
+	Plots.default(label=false)
+	#Logging.disable_logging(Logging.Warn);
 end;
 
 # ╔═╡ f3a514c8-bc3e-487f-af11-b43ff41c34e6

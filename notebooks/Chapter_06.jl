@@ -37,8 +37,8 @@ html"""
 
 # ╔═╡ 8da6e45a-9d78-479a-a8bb-57641e9a7375
 let
-	default(labels=false)
-	Logging.disable_logging(Logging.Warn)
+	Plots.default(labels=false)
+	#Logging.disable_logging(Logging.Warn)
 end;
 
 # ╔═╡ 299eb270-63f8-496f-a235-400f3859babd

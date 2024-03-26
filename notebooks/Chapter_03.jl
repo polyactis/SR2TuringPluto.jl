@@ -33,7 +33,7 @@ html"""
 """
 
 # ╔═╡ 81f65c1f-c44b-4e71-97e5-ae62a38c9b55
-default(labels=false)
+Plots.default(labels=false)
 
 # ╔═╡ 709a8185-d0d7-4367-866f-acf0aa00abe4
 md"### Code 3.1"

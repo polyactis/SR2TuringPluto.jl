@@ -31,9 +31,9 @@ html"""
 """
 
 # ╔═╡ c1cec086-0ca1-449a-b9d6-e1366d09f811
-begin
-	Logging.disable_logging(Logging.Warn)
-end;
+#begin
+	#Logging.disable_logging(Logging.Warn)
+#end;
 
 # ╔═╡ 5826ebdc-3ecf-48ff-ae46-91ac572db0b3
 md"### Code 2.1"

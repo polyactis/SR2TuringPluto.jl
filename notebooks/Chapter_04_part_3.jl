@@ -41,8 +41,8 @@ md"#### Setting default attributes for plots."
 
 # ╔═╡ dbad5708-44ff-488e-a6ef-654c9252f940
 begin
-	default(label=false)
-	Logging.disable_logging(Logging.Warn);
+	Plots.default(label=false)
+	#Logging.disable_logging(Logging.Warn);
 end;
 
 # ╔═╡ 13285996-780c-4079-9991-8010e46ad582

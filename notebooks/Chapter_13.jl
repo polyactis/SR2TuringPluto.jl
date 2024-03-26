@@ -40,8 +40,8 @@ html"""
 
 # ╔═╡ 45d98b5a-d248-41cd-9c5c-e792444dd7d9
 begin
-	default(label=false);
-	Logging.disable_logging(Logging.Warn);
+	Plots.default(label=false);
+	#Logging.disable_logging(Logging.Warn);
 end;
 
 # ╔═╡ 8147ea5b-1853-49bb-952d-231bc81928c5

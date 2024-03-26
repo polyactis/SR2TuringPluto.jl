@@ -28,7 +28,7 @@ begin
 end
 
 # ╔═╡ a532c481-bcca-4c6f-b297-a2e18e1cebe1
-default(label=false);
+Plots.default(label=false);
 
 # ╔═╡ f61eb194-60e0-423d-9cf9-7200b3985ce3
 md" ## 10.1 Maximum entropy."
