@@ -26,20 +26,36 @@ begin
 	using StatsPlots
 	using StatisticalRethinking
 	using StatisticalRethinkingPlots
+	using ParetoSmoothedImportanceSampling
+	import ParetoSmoothedImportanceSampling as psis
+	import ParetoSmooth
 	using Logging
+	# DocStringExtensions provides $(SIGNATURES)
+	using DocStringExtensions
+	#using ProgressBars
+	# have to import the student T distribution explicitly, as it is not exported
+	import Distributions: IsoTDist
 end
 
 # ╔═╡ ac0b951d-5260-40f5-86ba-1664f264ae21
-md"# Chapter 7 Ulysses' Compass"
+md"# Chap 7 Ulysses' Compass"
 
 # ╔═╡ 733dae80-07da-4ac9-9b58-517c0c2f6250
 versioninfo()
 
+# ╔═╡ a9a95df8-797c-4d43-b043-4e6b10fc4246
+md"## 7.0 How to display stdout/terminal output in Pluto.jl"
+
 # ╔═╡ 078fdb65-5bd6-4b0d-b672-617f5912480d
 begin
 	Plots.default(labels=false)
+	# Disable the following line first.
 	#Logging.disable_logging(Logging.Warn);
 end;
+
+# ╔═╡ 7fb1e6fa-1881-44a3-a409-cdb632b8e4e9
+md"- The following for-loop displays nothing because the loop returns a nothing object.
+- Pluto.jl only displays returned object."
 
 # ╔═╡ f00222ef-b0d3-4464-87ef-6da1adbb54ac
 for i in 1:20
@@ -64,7 +80,7 @@ let
 end
 
 # ╔═╡ 646fc015-eb4f-46e0-b483-1af49c9660bb
-md"- Output of the next snippet is possible due to map(1:20)"
+md"- Output of every iteration of the for-loop is possible due to map(1:20)"
 
 # ╔═╡ f8682d46-7ee7-4fd2-a64f-c783360572e1
 map(1:20) do i
@@ -90,6 +106,9 @@ end
 # ╔═╡ 41e60936-8367-4b04-9bb8-df9fb517a51f
 @with_stdout println("I am");
 
+# ╔═╡ 195af951-1ed0-420c-a939-e7883f8fd618
+md"After some tinkering (enable Logging.Warn), terminal output is now displayed in Pluto.jl"
+
 # ╔═╡ 93e9248c-2c0b-474c-aa9f-e9c66dcb6a00
 @time println("I am");
 
@@ -112,7 +131,7 @@ end
 md"## 7.1 The problem with parameters."
 
 # ╔═╡ 611c3828-f01f-4721-830b-736b28620e7e
-md"### Code 7.1"
+md"### 7.1 Load data & 7.2 Rescale data"
 
 # ╔═╡ ad511be2-fd88-4aba-a830-21e242d994f1
 begin
@@ -121,21 +140,19 @@ begin
 	brainvolcc = [438, 452, 612, 521, 752, 871, 1350]
 	masskg = [37.0, 35.5, 34.5, 41.5, 55.5, 61.0, 53.5]
 	d = DataFrame(:species => sppnames, :brain => brainvolcc, :mass => masskg)
-	d
-end;
-
-# ╔═╡ 4ee38b80-aded-40af-93ac-11a4ac2b9378
-md"### Code 7.2"
-
-# ╔═╡ 5c7f1f26-02ac-4325-a06c-8c26c75e6cf4
-begin
 	d[!,:mass_std] = (d.mass .- mean(d.mass))./std(d.mass)
 	d[!,:brain_std] = d.brain ./ maximum(d.brain)
 	d
-end
+end;
 
 # ╔═╡ 5a2f79ca-2d3e-4cd4-9de9-7c7e283a5052
-md"### Code 7.3"
+md"### Code 7.3 Regress brain on mass，optimized via MAP
+
+To match results from the book, the model was optimized using MAP estimation, not the MCMC I used before. The reason for that is the MCMC producing different estimation for log_σ value, which makes all the values very different.
+
+If you want, you can experiment with NUTS sampler for models in 7.1 and 7.2.
+
+In addition, you can also check [this discussion](https://github.com/StatisticalRethinkingJulia/StatisticalRethinkingTuring.jl/issues/7)"
 
 # ╔═╡ 94b5539b-4374-40b8-9501-8d3df49f20c3
 @model function model_m7_1(mass_std, brain_std)
@@ -154,21 +171,28 @@ begin
 end
 
 
+# ╔═╡ ed2f98b3-34bf-4ce5-9ef7-ef3a5499e8ff
+size(m7_1)
+
+# ╔═╡ 6c96a6c6-df1d-4dda-8d1d-49b7d13314c4
+@df DataFrame(m7_1) corrplot(cols(1:3), seriestype=:scatter, ms=0.2, alpha=0.5, size=(950, 800), bins=30, grid=true)
+
+# ╔═╡ 7994aea2-7b06-47cc-86f2-6afcda5a1707
+md"### Checking the m7_1 Chains"
+
 # ╔═╡ 0479f514-1b96-4115-beaa-35a96c40a1d7
 m7_1_ch
 
 # ╔═╡ 9a1a6b7f-8810-4a14-910a-2ff422de4289
-begin
-	typeof(m7_1_ch)
-end
+typeof(m7_1_ch)
 
 # ╔═╡ 788ea3c8-d94d-4201-b860-3f085f18f9e2
 m7_1_ch.info
 
 # ╔═╡ 3914cc70-e0c2-4b91-a456-5a301597e0fe
 begin
-@show m7_1_ch.name_map
-m7_1_ch.value
+	@show m7_1_ch.name_map
+	m7_1_ch.value
 end
 
 # ╔═╡ 1efdafc3-497f-434e-9a16-97636a4cfc4b
@@ -190,7 +214,7 @@ histogram(m7_1_ch[:max_hamiltonian_energy_error])
 m7_1_ch[:nom_step_size]
 
 # ╔═╡ 45122674-c5d2-4f61-af03-c74482618e90
-md"### Code 7.4"
+md"### Code 7.4 OLS to obtain posterior distribution of a & b, but not $\sigma$"
 
 # ╔═╡ 3b7ca48f-078f-4eef-9d0c-fa8724e711d3
 X = hcat(ones(length(d.mass_std)), d.mass_std)
@@ -199,30 +223,45 @@ X = hcat(ones(length(d.mass_std)), d.mass_std)
 m = lm(X, d.brain_std)
 
 # ╔═╡ 39dc811c-2742-4977-a203-c9fdcb5b218d
-md"### Code 7.5"
+md"### Code 7.5 calculate $R^2$"
 
 # ╔═╡ 85bb82da-efe7-4b34-8af5-cf60ae6e4757
 Random.seed!(12);
 
 # ╔═╡ 53806285-ea68-4f5c-b3fb-a382a894ec56
-md"## Do explicit simulation due to log_σ."
+md"## Do explicit simulation due to log_σ.
+
+- Why?"
 
 # ╔═╡ 59b9a24b-6967-418b-a4f8-e67ceb0a5474
-begin
+@time begin
+	# d.mass_std is a 7-element vector.
 	s = [
 		rand(MvNormal((@. r.a + r.b * d.mass_std), exp(r.log_σ)))
 		for r ∈ eachrow(m7_1)
 	]
+	# s is a vector of length 1000. each element is a 7-element vertical vector.
+	@show size(s)
+	# transpose each element of s to horizontal vector and then vertically concatenate them.
 	s = vcat(s'...);
+	@show size(s)
 
 	r = mean.(eachcol(s)) .- d.brain_std;
-	resid_var = var(r, corrected=false)
+	@show size(r)
+	@show resid_var = var(r, corrected=false)
 	outcome_var = var(d.brain_std, corrected=false)
+	@show outcome_var
 	1 - resid_var/outcome_var
 end
 
+# ╔═╡ 74b85675-515a-4168-9739-8e8eeb42dab1
+@which simulate(m7_1, (r, x) -> Normal(r.a + r.b * x, exp(r.log_σ)), d.mass_std)
+
+# ╔═╡ f4d22dcc-81e8-4279-9eb3-861f0eeb5f83
+MvNormal([1,2,3], 0.1)
+
 # ╔═╡ ed541621-2245-49f9-9672-31e20b9b7765
-md"### Code 7.6"
+md"### Code 7.6 Why $R^2$ is bad?"
 
 # ╔═╡ 47d9566c-93ec-4f70-b7b6-5586193bcdef
 md"#### Function is implemented in a generic way to support any amount of b[x] coefficients."
@@ -252,7 +291,7 @@ function R2_is_bad(df; sigma=missing)
 end
 
 # ╔═╡ e8f6166f-20e5-40a2-a8fc-692ea8704b6d
-md"### Code 7.7"
+md"### Code 7.7 2nd-degree polynomial"
 
 # ╔═╡ f74d5bc3-747b-4b12-9fb2-7e4a19cfe2c1
 @model function model_m7_2(mass_std, brain_std)
@@ -271,7 +310,7 @@ begin
 end
 
 # ╔═╡ 41fc983a-9209-4ff5-b9fa-5798c7d387af
-md"### Code 7.8"
+md"### Code 7.8 3-, 4-, 5-degree polynomial fitting: `brain_std ~ mass_std`"
 
 # ╔═╡ 0f8d2476-7379-4bec-8a6f-e6ef81066ebb
 md"#### Implemented the sample in a general way."
@@ -312,6 +351,9 @@ begin
 	describe(m7_5)
 end
 
+# ╔═╡ e259cf96-eb70-4fe7-9c25-1f25686b1faa
+md"### Code 7.9: 6-degree polynomial"
+
 # ╔═╡ bff2a56e-e799-4d50-b97b-79983df86565
 @model function model_m7_6(mass_std, brain_std)
     a ~ Normal(0.5, 1)
@@ -329,7 +371,7 @@ begin
 end
 
 # ╔═╡ 941248e9-c1ec-4d6a-8a2a-dbdd9aee17d8
-md"### Code 7.10"
+md"### Code 7.10 Fig 7.3"
 
 # ╔═╡ 97a58b2a-a200-4249-acf3-c52d28ca6aea
 mass_seq = range(extrema(d.mass_std)...; length=100)
@@ -443,7 +485,7 @@ plot(
 md"## 7.2 Entropy and accuracy."
 
 # ╔═╡ e8765238-eec6-41c0-9c8c-148c9e51aad9
-md"### Code 7.12"
+md"### Code 7.12  Information and KL Divergence"
 
 # ╔═╡ fd1f8ae2-6839-4f7e-9141-66824490df72
 p = [0.3, 0.7];
@@ -476,16 +518,650 @@ end
 # ╔═╡ adb89664-66d8-4dbb-8f42-6043dcc09109
 plot_entropy_for_binomial_varying_p()
 
+# ╔═╡ fda881bd-9075-41be-b59d-b930f5444095
+md"### 7.13 lppd: Log-Pointwise-Predictive-Density"
+
+# ╔═╡ 9904cc2f-02f1-44d7-9831-fcefe95fe71d
+lppd(m7_1, (r,x)->Normal(r.a + r.b*x, exp(r.log_σ)), d.mass_std, d.brain_std)
+
+# ╔═╡ 662b087b-b302-4ecb-95a9-cd696a74fcbc
+ md"### 7.14 Run lppd manually"
+
+# ╔═╡ a09a81fb-580d-45d5-9893-121a22a3555f
+[
+    begin
+        s = [
+            logpdf(Normal(r.a + r.b * x, exp(r.log_σ)), y)
+            for r ∈ eachrow(m7_1)
+        ]
+		# average log likelihood: log(Σᵢ expᵢ^s/n)
+		# average all n samplings. i is sample i.
+        logsumexp(s) - log(length(s))
+    end
+    for (x, y) ∈ zip(d.mass_std, d.brain_std)
+]
+
+# ╔═╡ d3389c26-f9dd-4349-8d0b-4f3f9bb93b91
+md"### 7.15 lppd function"
+
+# ╔═╡ f17ea741-c98f-4c88-94d2-03a3ca0d08fe
+# it could be implemented in a generic way, but I'm too lazy
+df_funcs = [
+    (m7_1, (r, x) -> Normal(r.a + r.b*x, exp(r.log_σ))),
+    (m7_2, (r, x) -> Normal(r.a + r."b[1]" * x + r."b[2]"*x^2, exp(r.log_σ))),
+    (m7_3, (r, x) -> Normal(r.a + r."b[1]" * x + r."b[2]"*x^2 + r."b[3]"*x^3, exp(r.log_σ))),
+    (m7_4, (r, x) -> Normal(r.a + r."b[1]" * x + r."b[2]"*x^2 + r."b[3]"*x^3 + 
+                                  r."b[4]"*x^4, exp(r.log_σ))),
+    (m7_5, (r, x) -> Normal(r.a + r."b[1]" * x + r."b[2]"*x^2 + r."b[3]"*x^3 + 
+                                  r."b[4]"*x^4 + r."b[5]"*x^5, exp(r.log_σ))),
+    (m7_6, (r, x) -> Normal(r.a + r."b[1]" * x + r."b[2]"*x^2 + r."b[3]"*x^3 + 
+                                  r."b[4]"*x^4 + r."b[5]"*x^5 + r."b[6]"*x^6, 0.001)),
+];
+
+# ╔═╡ 640bc9cb-0967-4a18-8e1d-5a3ed4a9b33c
+[
+    sum(lppd(df, f, d.mass_std, d.brain_std))
+    for (df, f) ∈ df_funcs
+]
+
+# ╔═╡ 9ae21be4-07ce-4ac9-ab58-4637ffd2281e
+md"### 7.16 Define multiple functions"
+
+# ╔═╡ 78449377-ffcd-41da-8466-d2059c3d406a
+@model function m7_sim(x, y; degree::Int=2)
+    beta ~ MvNormal(zeros(degree), 1)
+    μ = x * beta
+    y ~ MvNormal(μ, 1)
+end
+
+# ╔═╡ c10300fb-72a0-4668-8bb4-fa4be69b03c7
+"""
+- Calculate sum(-2*lppd) from sampled params (b), an x matrix and target y values.
+
+$(SIGNATURES) 
+- call SR.lppd() function.
+
+
+- Arguments:
+  - m_df: data frame of model coefficients.
+  - xseq: a matrix of x, each row is one sample.
+ - yseq: a vector of response variable y.
+
+- Returned values
+  - lppd of all samples.
+
+"""
+function get_lppd(m_df, xseq, yseq)
+    t = DataFrame(:b => collect(eachrow(Matrix(m_df))))
+    -2*sum(StatisticalRethinking.lppd(t, (r, x) -> Normal(r.b'*x, 1), eachrow(xseq), yseq))
+end
+
+# ╔═╡ 1e502519-f1ed-4c83-ba8d-d96e66269d4e
+"""
+$(SIGNATURES)
+"""
+function calc_train_test(N, k; count=100)
+    trn_v, tst_v = [], []
+    for _ in 1:count
+        # method sim_train_test from StatisticalRethinking just simulates the data to be fitted by the model
+        y, x_train, x_test = sim_train_test(N=N, K=k)
+
+        estim = optimize(m7_sim(x_train, y, degree=max(2,k)), MAP())
+        m7_2 = DataFrame(sample(estim, 1000))
+        # commented out is the MCMC way of estimation instead of MAP
+#         m_chain = sample(m7_sim(x_train, y, degree=max(2,k)), NUTS(), 1000)
+#         m7_2 = DataFrame(m_chain)
+        t1 = get_lppd(m7_2, x_train, y)
+        t2 = get_lppd(m7_2, x_test, y)
+        push!(trn_v, t1)
+        push!(tst_v, t2)
+    end
+    (mean_and_std(trn_v), mean_and_std(tst_v))
+end
+
+# ╔═╡ 124a5a18-3a96-4394-9836-aa13266a936e
+md"### 7.17 Multi-threading"
+
+# ╔═╡ 823b783e-f114-427e-b4b4-f135eec09d86
+begin
+	k_count = 5
+	k_seq = 1:k_count
+	count = 100
+	trn_20, tst_20 = [], []
+	trn_100, tst_100 = [], []
+	
+	Threads.@threads for k in k_seq
+	    println("Processing $k with N=20...")
+	    t1, t2 = calc_train_test(20, k, count=count)
+	    push!(trn_20, t1)
+	    push!(tst_20, t2)
+	    println("Processing $k with N=100...")
+	    t1, t2 = calc_train_test(100, k, count=count)
+	    push!(trn_100, t1)
+	    push!(tst_100, t2)
+	end
+end
+
+# ╔═╡ 3d481718-a252-4f1c-9db9-289bd659982b
+md"### 7.18 Plot the training and testing deviance"
+
+# ╔═╡ c62dcfeb-fdb8-4d5d-a51d-286caddf4e00
+begin
+	scatter(k_seq, first.(trn_20); yerr=last.(trn_20), label="train", title="N=20")
+	scatter!(k_seq .+ .1, first.(tst_20); yerr=last.(tst_20), label="test")
+end
+
+# ╔═╡ ab263a84-4612-4459-bf50-78bf0f236e44
+begin
+	scatter(k_seq, first.(trn_100); yerr=last.(trn_100), label="train", title="N=100")
+	scatter!(k_seq .+ .1, first.(tst_100); yerr=last.(tst_100), label="test")
+end
+
+# ╔═╡ 8b225437-50c2-40f8-aa10-0e0c1b64fa5b
+md"## 7.3 Golem taming: regularization
+
+No code pieces in this section"
+
+# ╔═╡ 410933c5-0353-4060-9879-d08a84bb66df
+md"## 7.4 Predicting predictive accuracy"
+
+# ╔═╡ 45d6b219-852b-4941-a09e-2128dfc88939
+md"### 7.19 Monte Carlo of a Bayesian Linear Model"
+
+# ╔═╡ f6516e63-a3f0-4bcb-a8ee-579ca95a95c3
+d_cars = DataFrame(CSV.File("data/cars.csv", drop=["Column1"]))
+
+# ╔═╡ 77c257c8-d4f4-4f33-9038-7f33123c5951
+size(d_cars)
+
+# ╔═╡ fe4d08db-f84f-44ae-8499-5ef349e5806f
+describe(d_cars)
+
+# ╔═╡ fdad6aeb-79c0-4db5-8ac0-15b14444a679
+std.(eachcol(d_cars))
+
+# ╔═╡ 9f8aaf9c-8f23-4d90-b235-5d953713546e
+begin	
+	@model function model_m(speed, dist)
+	    a ~ Normal(0, 100)
+	    b ~ Normal(0, 10)
+	    μ = @. a + b * speed 
+	    σ ~ Exponential(1)
+	    dist ~ MvNormal(μ, σ)
+	end
+	
+	Random.seed!(17)
+	@time m_cars_ch = sample(model_m(d_cars.speed, d_cars.dist), NUTS(), 1000)
+	m_cars_df = DataFrame(m_cars_ch);
+end
+
+# ╔═╡ c41a1a22-36e7-46c8-88a7-04c8283fe681
+describe(m_cars_df)
+
+# ╔═╡ bc123b91-16a7-47c1-b4ed-241412065d27
+std.(eachcol(m_cars_df))
+
+# ╔═╡ aa3e88f8-5802-48f8-b4dc-a0655ad38ffb
+md"### 7.20 logprob"
+
+# ╔═╡ 41138aaa-52fb-467c-89a4-37edc46f170e
+begin
+	fun = (r, (x, y)) -> normlogpdf(r.a + r.b * x, r.σ, y)
+	@time lp = StatisticalRethinking.link(m_cars_df, fun, zip(d_cars.speed, d_cars.dist))
+	lp = hcat(lp...);
+end
+
+# ╔═╡ aed57454-46c0-4abe-b0f7-8b03b8a78d48
+md"### 7.21 lppd"
+
+# ╔═╡ b8543e08-fb9d-442d-b3c3-93710660bb54
+begin
+	n_samples, n_cases = size(lp)
+	lppd_vals = [
+	    logsumexp(c) - log(n_samples)
+	    for c in eachcol(lp)
+	];
+	
+	## if only lppd were needed, we can calculate it with
+	# lppd_vals = lppd(m_df, (r, x) -> Normal(r.a + r.b * x, r.σ), d.speed, d.dist)
+end
+
+# ╔═╡ 7a2a581a-65a4-4d1f-96a0-03621d8694f0
+md"### 7.22 penalty of WAIC"
+
+# ╔═╡ 0bcd703f-3f33-471e-9a9f-e0fafcbb14ea
+pWAIC = [
+    StatisticalRethinking.var2(c)
+    for c in eachcol(lp)
+]
+
+# ╔═╡ ded8c2cc-498f-4717-89f1-73b1ad8bef16
+md"### 7.23 WAIC"
+
+# ╔═╡ 07e15ebd-d4c3-4960-9af7-59eff42cdd05
+-2*(sum(lppd_vals) - sum(pWAIC))
+
+# ╔═╡ e48c366c-ed2b-4005-9d0b-aa77d7bae51d
+md"### 7.24 stddev of WAIC"
+
+# ╔═╡ 31774687-7bbb-4474-affe-7aa0e6d6635f
+begin
+	waic_vec = -2 * (lppd_vals .- pWAIC)
+	sqrt(n_cases * StatisticalRethinking.var2(waic_vec))
+end
+
+# ╔═╡ 55069810-e31b-43bf-9af4-cb4d4594f788
+md"## 7.5 Model comparison
+
+- Data and models from chapter 6"
+
+# ╔═╡ 1bf4d82f-f083-45b1-89b8-b14b3cfde07a
+begin
+	begin
+		Random.seed!(70)
+		# number of plants
+		N = 100
+		h0 = rand(Normal(10, 2), N)
+		treatment = repeat(0:1, inner=div(N, 2))
+		fungus = [rand(Binomial(1, 0.5 - treat*0.4)) for treat in treatment]
+		h1 = h0 .+ rand(MvNormal(5 .- 3 .* fungus, 1))
+		
+		d_fungus = DataFrame(:h0 => h0, :h1 => h1, :treatment => treatment, :fungus => fungus)
+		
+		@model function model_m6_6(h0, h1)
+		    p ~ LogNormal(0, 0.25)
+		    σ ~ Exponential(1)
+		    μ = h0 .* p
+		    h1 ~ MvNormal(μ, σ)
+		end
+		
+		@time m6_6 = sample(model_m6_6(d_fungus.h0, d_fungus.h1), NUTS(), 1000)
+		m6_6_df = DataFrame(m6_6)
+		
+		@model function model_m6_7(h0, treatment, fungus, h1)
+		    a ~ LogNormal(0, 0.2)
+		    bt ~ Normal(0, 0.5)
+		    bf ~ Normal(0, 0.5)
+		    σ ~ Exponential(1)
+		    p = @. a + bt*treatment + bf*fungus
+		    μ = h0 .* p
+		    h1 ~ MvNormal(μ, σ)
+		end
+		
+		@time m6_7 = sample(model_m6_7(d_fungus.h0, d_fungus.treatment, d_fungus.fungus, d_fungus.h1), NUTS(), 1000)
+		m6_7_df = DataFrame(m6_7)
+		
+		@model function model_m6_8(h0, treatment, h1)
+		    a ~ LogNormal(0, 0.2)
+		    bt ~ Normal(0, 0.5)
+		    σ ~ Exponential(1)
+		    p = @. a + bt*treatment
+		    μ = h0 .* p
+		    h1 ~ MvNormal(μ, σ)
+		end
+		
+		@time m6_8 = sample(model_m6_8(d_fungus.h0, d_fungus.treatment, d_fungus.h1), NUTS(), 1000)
+		m6_8_df = DataFrame(m6_8);
+	end
+end
+
+# ╔═╡ f49b25b8-06d0-4f11-948d-b12e74ea665d
+md"### 7.25 WAIC for m6_7 (include both treatment and fungus)"
+
+# ╔═╡ 73baf70d-c5b3-4104-9075-f1376858143b
+begin
+	@time calc_normlogpdf = (r, (x,bt,bf,y)) -> normlogpdf(x*(r.a + r.bt*bt + r.bf*bf), r.σ, y)
+	
+	# log likelihood calculation
+	@time ll = StatisticalRethinking.link(m6_7_df, calc_normlogpdf, 
+		zip(d_fungus.h0, d_fungus.treatment, d_fungus.fungus, d_fungus.h1));
+	ll = hcat(ll...);
+	@show size(ll)
+	@time psis.waic(ll)
+end
+
+# ╔═╡ cec77f99-48ea-4a81-9a72-bcff3574bf12
+md"### 7.26 Compare WAIC of m6.6 - m6.8"
+
+# ╔═╡ bcb4b829-939c-48ac-96a3-7b6d53367c7f
+begin
+	calc_normlogpdf_1 = (r, (x,y)) -> normlogpdf(x*r.p, r.σ, y)
+	m6_ll = StatisticalRethinking.link(m6_6_df, calc_normlogpdf_1, zip(d_fungus.h0, d_fungus.h1));
+	m6_ll = hcat(m6_ll...);
+	
+	calc_normlogpdf_3 = (r, (x,bt,bf,y)) -> normlogpdf(x*(r.a + r.bt*bt + r.bf*bf), r.σ, y)
+	m7_ll = StatisticalRethinking.link(m6_7_df, calc_normlogpdf_3, zip(d_fungus.h0, d_fungus.treatment, d_fungus.fungus, d_fungus.h1));
+	m7_ll = hcat(m7_ll...);
+	
+	calc_normlogpdf_2 = (r, (x,bt,y)) -> normlogpdf(x*(r.a + r.bt*bt), r.σ, y)
+	m8_ll = StatisticalRethinking.link(m6_8_df, calc_normlogpdf_2, zip(d_fungus.h0, d_fungus.treatment, d_fungus.h1));
+	m8_ll = hcat(m8_ll...);
+	
+	compare([m6_ll, m7_ll, m8_ll], :waic, mnames=["m6", "m7", "m8"])
+end
+
+# ╔═╡ 47f11b04-e951-4c42-822b-18baa6b34766
+md"### 7.27  stddev of WAIC delta between m6.7 and m6.8"
+
+# ╔═╡ 3853f959-3ffe-4f4f-bb9f-5501845f40c9
+begin
+	waic_m6_7 = waic(m7_ll, pointwise=true).WAIC
+	waic_m6_8 = waic(m8_ll, pointwise=true).WAIC
+	n = length(waic_m6_7)
+	diff_m6_78 = waic_m6_7 - waic_m6_8
+	sqrt(n*StatisticalRethinking.var2(diff_m6_78))
+end
+
+# ╔═╡ 2f218914-d9e0-45cd-b9fd-89e35bfcdcc9
+md"### 7.28 99% confidence interval of dWAIC"
+
+# ╔═╡ 76b82e84-62bc-43e4-8d39-f96ce0e82ca1
+ 40.0 .+ [-1, 1]*10.4*2.6
+
+# ╔═╡ 5197af99-c495-4193-8b10-58df5a1756a2
+md"### 7.29 plot WAIC/deviance of 3 different models"
+
+# ╔═╡ 5f6fd968-7dc7-40f8-918c-7d07a0dbed97
+begin
+	dw = compare([m6_ll, m7_ll, m8_ll], :waic, mnames=["m6", "m7", "m8"])
+	scatter(reverse(dw.WAIC), reverse(dw.models); xerror=reverse(dw.SE))
+end
+
+# ╔═╡ d4f685d5-10da-4597-b987-267d47e23c90
+md"### 7.30 stddev of WAIC differences between m6.6 and m6.8"
+
+# ╔═╡ 0f333241-27fd-44d5-9499-2329414b5340
+begin
+	waic_m6_6 = waic(m6_ll, pointwise=true).WAIC
+	waic_m6_8_2 = waic(m8_ll, pointwise=true).WAIC
+	diff_m6_68 = waic_m6_6 - waic_m6_8_2
+	sqrt(n*StatisticalRethinking.var2(diff_m6_68))
+end
+
+# ╔═╡ b1b3d896-b1a6-4684-b0d2-3116d7ba76f0
+md"### 7.31 stddev of WAIC differences among all models
+
+Current version of `StatisticalRethinking.compare` doesn't calculate pairwise error. You should use above logic to get values not returned in `compare` result."
+
+# ╔═╡ 15a2f5fe-da00-4524-9462-a9b91e9b71d2
+md"### 7.32 Fit 3 models of the divorce dataset ( Divorce rate ~ Marriage rate, Age at Marriage) and get the  corresponding pointwise log-likelihood.
+- The divorce datasets contain 50 data points/states."
+
+# ╔═╡ 2c51f054-46d1-41c6-8d9d-05e4f9b2fc0d
+begin
+	Random.seed!(1)
+	d_divorce = DataFrame(CSV.File("data/WaffleDivorce.csv"))
+	d_divorce[!,:D] = standardize(ZScoreTransform, d_divorce.Divorce)
+	d_divorce[!,:M] = standardize(ZScoreTransform, d_divorce.Marriage)
+	d_divorce[!,:A] = standardize(ZScoreTransform, d_divorce.MedianAgeMarriage)
+	@show size(d_divorce)
+	@model function model_m5_1(A, D)
+	    σ ~ Exponential(1)
+	    a ~ Normal(0, 0.2)
+	    bA ~ Normal(0, 0.5)
+	    μ = @. a + bA * A
+	    D ~ MvNormal(μ, σ)
+	end
+	
+	@time m5_1 = sample(model_m5_1(d_divorce.A, d_divorce.D), NUTS(), 1000)
+	m5_1_df = DataFrame(m5_1)
+	
+	@model function model_m5_2(M, D)
+	    σ ~ Exponential(1)
+	    a ~ Normal(0, 0.2)
+	    bM ~ Normal(0, 0.5)
+	    μ = @. a + bM * M
+	    D ~ MvNormal(μ, σ)
+	end
+	
+	@time m5_2 = sample(model_m5_2(d_divorce.M, d_divorce.D), NUTS(), 1000)
+	m5_2_df = DataFrame(m5_2);
+	
+	@model function model_m5_3(A, M, D)
+	    σ ~ Exponential(1)
+	    a ~ Normal(0, 0.2)
+	    bA ~ Normal(0, 0.5)
+	    bM ~ Normal(0, 0.5)
+	    μ = @. a + bA * A + bM * M
+	    D ~ MvNormal(μ, σ)
+	end
+	
+	@time m5_3 = sample(model_m5_3(d_divorce.A, d_divorce.M, d_divorce.D), NUTS(), 1000)
+	m5_3_df = DataFrame(m5_3);
+end
+
+# ╔═╡ c09d043f-566b-43c5-bf90-82e14d682a7b
+begin
+	@time m5_1_ll = StatisticalRethinking.link(m5_1_df, 
+		(r, (x,y)) -> StatsFuns.normlogpdf(r.a + r.bA * x, r.σ, y), 
+		zip(d_divorce.A, d_divorce.D));
+	m5_1_ll = hcat(m5_1_ll...)
+	@show size(m5_1_ll)
+	
+	@time m5_2_ll = StatisticalRethinking.link(m5_2_df, 
+		(r, (x,y)) -> StatsFuns.normlogpdf(r.a + r.bM * x, r.σ, y), 
+		zip(d_divorce.M, d_divorce.D));
+	m5_2_ll = hcat(m5_2_ll...)
+	@show size(m5_2_ll)
+	
+	@time m5_3_ll = StatisticalRethinking.link(m5_3_df, 
+		(r, (a,m,y)) -> StatsFuns.normlogpdf(r.a + r.bA * a + r.bM * m, r.σ, y), 
+		zip(d_divorce.A, d_divorce.M, d_divorce.D));
+	m5_3_ll = hcat(m5_3_ll...);
+end
+
+# ╔═╡ 8b3ec669-e0f1-4fbf-a8b9-066fc4faa5d3
+describe(m5_3_df)
+
+# ╔═╡ 02b0e6c8-12ba-46ee-a703-7b7f507560d6
+std.(eachcol(m5_3_df))
+
+# ╔═╡ d33289fb-ff49-41c5-bf68-0472e92a6800
+plot(m5_3)
+
+# ╔═╡ 896b01ce-9e16-42e3-876e-568011faf107
+md"### 7.33 Compare 3 models via PSIS: m5_1 is best."
+
+# ╔═╡ 29d5a336-ea7e-4ae7-b001-0d2fef59c85b
+compare([m5_1_ll, m5_2_ll, m5_3_ll], :psis, mnames=["m5.1", "m5.2", "m5.3"])
+
+# ╔═╡ b38c9b77-11ea-457e-9e94-aea8601c339f
+md"### 7.34 m5_3: Compare pointwise PSIS Pareto k and WAIC penalty"
+
+# ╔═╡ 67ef36b0-7244-42ee-a7ad-bbecad0cb567
+"""
+- reshape data to format of ParetoSmooth.psis_loo function
+
+$(SIGNATURES)
+
+- Arguments
+  - ll: a [number-of-samplings X number-of-data-points] matrix of log-likelihoods.
+
+- Returned values:
+  - a 3D array: [number-of-data-points X number-of-samples X 1].
+"""
+function ll_to_psis(ll::Matrix{<:Real})
+	@show size(ll)
+	t = ll'
+	@show size(t)
+	#Make the dataset 3 dimensional
+	collect(reshape(t, size(t)..., 1))
+end
+
+# ╔═╡ 2dacd63f-b12a-461f-8509-ac557744d612
+begin
+	m5_3_t = ll_to_psis(m5_3_ll)
+	@show size(m5_3_t)
+	PSIS_m5_3 = ParetoSmooth.psis_loo(m5_3_t)
+	WAIC_m5_3 = psis.waic(m5_3_ll, pointwise=true)
+end
+
+# ╔═╡ c6535255-66dd-4d99-bd31-19e67f8ba055
+PSIS_m5_3
+
+# ╔═╡ 69e5abc8-4e53-4842-8cf2-5fc0bf6b900c
+begin
+	scatter(PSIS_m5_3.pointwise(:pareto_k), WAIC_m5_3.penalty, 
+		    xlab="PSIS Pareto k", ylab="WAIC penalty", title="Gaussian model (m5.3)")
+	vline!([0.5], c=:black, s=:dash)
+end
+
+# ╔═╡ 59b23c71-f172-4aa5-ad3e-2f1b0876188f
+md"### 7.35 m5_3t: student T df=2, Compare pointwise PSIS Pareto k and WAIC penalty"
+
+# ╔═╡ 2106ac11-33de-4673-bc1f-32ecb57089f6
+begin
+	@model function model_m5_3t(A, M, D)
+	    σ ~ Exponential(1)
+	    a ~ Normal(0, 0.2)
+	    bA ~ Normal(0, 0.5)
+	    bM ~ Normal(0, 0.5)
+	    μ = @. a + bA * A + bM * M
+		#z = (D.-μ)/σ
+		# The vector . below is optional for NUTS sample. But psis_loo() requires it.
+	    #z ~ TDist(2)
+		#D ~ Distributions.IsoTDist(2, μ, σ)
+		D ~ Distributions.mvtdist(2, μ, σ)
+	end
+	
+	@time m5_3t = sample(model_m5_3t(d_divorce.A, d_divorce.M, d_divorce.D), NUTS(), 1000)
+	m5_3t_df = DataFrame(m5_3t);
+end
+
+# ╔═╡ 048318ba-f836-4cdf-9e73-7a785c736297
+begin
+	@show describe(m5_3t_df)
+	std.(eachcol(m5_3t_df))
+end
+
+# ╔═╡ f73d822c-a815-4a35-b0cf-c11c0c30c6ce
+plot(m5_3t)
+
+# ╔═╡ 32ecb432-7176-4aa3-9369-b5de15634bdc
+ParetoSmooth.psis_loo(model_m5_3t(d_divorce.A, d_divorce.M, d_divorce.D), m5_3t)
+
+# ╔═╡ 7ec1588b-54fb-4803-9e21-2dd9e79ba7c9
+begin
+	
+	m5_3t_ll = StatisticalRethinking.link(m5_3t_df, 
+		(r, (a,m,y)) -> Distributions.logpdf(Distributions.mvtdist(2, [r.a + r.bA * a + r.bM * m], r.σ), [y]), 
+		zip(d_divorce.A, d_divorce.M, d_divorce.D));
+	m5_3t_ll = hcat(m5_3t_ll...);
+	
+	m5_3t_t = ll_to_psis(m5_3t_ll)
+	@show size(m5_3t_t)
+	PSIS_m5_3t = ParetoSmooth.psis_loo(m5_3t_t)
+	WAIC_m5_3t = psis.waic(m5_3t_ll, pointwise=true)
+end
+
+# ╔═╡ 69510bfa-79c0-4bca-87dc-4ec7b8ed94af
+PSIS_m5_3t
+
+# ╔═╡ 5792f4ff-f1bd-48bb-968a-0ebc1a3b4c53
+PSIS_m5_3t.psis_object
+
+# ╔═╡ 39dbf2e7-13fa-4c21-800e-80d7af55d03e
+begin
+	@show propertynames(PSIS_m5_3t)
+	@show size(PSIS_m5_3t.pointwise)
+	@show typeof(PSIS_m5_3t.pointwise)
+	@show propertynames(PSIS_m5_3t.pointwise)
+	PSIS_m5_3t.pointwise
+end
+
+# ╔═╡ 76c05007-037d-48d9-86b7-9f37a799e546
+begin
+	@show PSIS_m5_3t.pointwise.data
+	@show PSIS_m5_3t.pointwise.statistic
+end
+
+# ╔═╡ 63eb903d-c425-46a0-8433-c80af6470bb1
+PSIS_m5_3t.pointwise[data=2]
+
+# ╔═╡ ff0a1377-9d07-4d88-a06c-38a91a6b12d1
+histogram(collect(PSIS_m5_3t.pointwise[statistic=5]), bins=20)
+
+# ╔═╡ a931dd64-2491-4a11-af2e-0901041bb0be
+PSIS_m5_3t.pointwise[statistic=:pareto_k]
+
+# ╔═╡ cd4ce03c-84f1-4678-b74d-3e98ed510300
+size(PSIS_m5_3t.pointwise(:cv_elpd))
+
+# ╔═╡ 4f211432-0c05-4a47-a9ae-01d67a3f6c4a
+md"- No outliers in PSIS K after replacing Normal() with student T " 
+
+# ╔═╡ 200694d2-400b-4510-b232-a3e3e8238ae5
+begin
+		scatter(PSIS_m5_3t.pointwise(:pareto_k), WAIC_m5_3t.penalty, 
+		    xlab="PSIS Pareto k", ylab="WAIC penalty", title="Student T (df=2) (m5.3)")
+		vline!([0.5], c=:black, s=:dash)
+end
+
+# ╔═╡ 030db799-b6e1-458d-814e-be806dd296dc
+md"### 7.36 m5_1t"
+
+# ╔═╡ edacad84-bc81-4dc0-94e5-5cd2809bdae2
+begin
+	@model function model_m5_1t(A, D)
+	    σ ~ Exponential(1)
+	    a ~ Normal(0, 0.2)
+	    bA ~ Normal(0, 0.5)
+	    μ = @. a + bA * A
+		# The vector . below is optional for NUTS sample. But psis_loo() requires it.
+	    D ~ IsoTDist(2, μ, σ)
+	end
+	
+	@time m5_1t = sample(model_m5_1t(d_divorce.A, d_divorce.D), NUTS(), 1000)
+	m5_1t_df = DataFrame(m5_1t);
+end
+
+# ╔═╡ a8caa1df-141f-4665-a864-9ae960682c80
+begin
+	@show describe(m5_1t_df)
+	std.(eachcol(m5_1t_df))
+end
+
+# ╔═╡ de16bb86-0468-4db3-a085-cf11d437db17
+plot(m5_1t)
+
+# ╔═╡ fc186a6d-7afa-43f1-9545-c14399a6d708
+begin
+	m5_1t_ll = StatisticalRethinking.link(m5_1t_df, 
+		(r, (a,y)) -> Distributions.logpdf(IsoTDist(2, [r.a + r.bA * a], r.σ), [y]), 
+		zip(d_divorce.A, d_divorce.D));
+	m5_1t_ll = hcat(m5_1t_ll...);
+	
+	m5_1t_t = ll_to_psis(m5_1t_ll)
+	@show size(m5_1t_t)
+	PSIS_m5_1t = ParetoSmooth.psis_loo(m5_1t_t)
+	WAIC_m5_1t = psis.waic(m5_1t_ll, pointwise=true)
+end
+
+# ╔═╡ 3c752715-c8e0-473d-b70a-7769fee640e1
+begin
+		scatter(PSIS_m5_1t.pointwise(:pareto_k), WAIC_m5_1t.penalty, 
+		    xlab="PSIS Pareto k", ylab="WAIC penalty", title="Divorce (Student T df=2)  ~ a + b*Age-at-Marraige (m5.1)")
+		vline!([0.5], c=:black, s=:dash)
+end
+
+# ╔═╡ 20a3bb3c-04b5-42dd-8013-3f689d782d00
+md"- stddev of σ is much larger than the Normal distribution model, which may explain why there are `more Pareto K outliers` in this student T model than Normal.
+- A similar model by PyMC also produces a much smaller stddev. thus no Pareto K outlier. Not sure why."
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 Dagitty = "d56128e0-8113-48cd-82a0-fc808dc30d4b"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 DrWatson = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
 GLM = "38e38edf-8417-5370-95a0-9cbb8c7f171a"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+ParetoSmooth = "a68b5a21-f429-434e-8bfa-46b447300aac"
+ParetoSmoothedImportanceSampling = "98f080ec-61e2-11eb-1c7b-31ea1097256f"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
@@ -499,9 +1175,13 @@ Turing = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
 CSV = "~0.10.12"
 Dagitty = "~0.0.1"
 DataFrames = "~1.6.1"
+Distributions = "~0.25.107"
+DocStringExtensions = "~0.9.3"
 DrWatson = "~2.13.0"
 GLM = "~1.9.0"
 Optim = "~1.8.0"
+ParetoSmooth = "~0.7.8"
+ParetoSmoothedImportanceSampling = "~1.5.3"
 PlutoUI = "~0.7.23"
 StatisticalRethinking = "~4.7.4"
 StatisticalRethinkingPlots = "~1.1.0"
@@ -516,7 +1196,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.2"
 manifest_format = "2.0"
-project_hash = "8045d00b6aa1cffa3fcd13fa43e4113dfd371d8f"
+project_hash = "f06b70866ff142c649faf07a932855f150a627f1"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "41c37aa88889c171f1300ceac1313c06e891d245"
@@ -567,6 +1247,7 @@ deps = ["CompositionsBase", "ConstructionBase", "Dates", "InverseFunctions", "Li
 git-tree-sha1 = "c0d491ef0b135fd7d63cbc6404286bc633329425"
 uuid = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
 version = "0.1.36"
+weakdeps = ["AxisKeys", "IntervalSets", "Requires", "StaticArrays", "StructArrays", "Unitful"]
 
     [deps.Accessors.extensions]
     AccessorsAxisKeysExt = "AxisKeys"
@@ -574,14 +1255,6 @@ version = "0.1.36"
     AccessorsStaticArraysExt = "StaticArrays"
     AccessorsStructArraysExt = "StructArrays"
     AccessorsUnitfulExt = "Unitful"
-
-    [deps.Accessors.weakdeps]
-    AxisKeys = "94b1ba4f-4ee9-5380-92f1-94cde586c3c5"
-    IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
-    Requires = "ae029012-a4dd-5104-9daa-d747884805df"
-    StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
-    StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
-    Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
@@ -708,6 +1381,32 @@ deps = ["Dates", "IntervalSets", "IterTools", "RangeArrays"]
 git-tree-sha1 = "16351be62963a67ac4083f748fdb3cca58bfd52f"
 uuid = "39de3d68-74b9-583c-8d2d-e117c070f3a9"
 version = "0.4.7"
+
+[[deps.AxisKeys]]
+deps = ["IntervalSets", "LinearAlgebra", "NamedDims", "Tables"]
+git-tree-sha1 = "2404d61946c5d17a120101dbc753739ef216b0de"
+uuid = "94b1ba4f-4ee9-5380-92f1-94cde586c3c5"
+version = "0.2.14"
+
+    [deps.AxisKeys.extensions]
+    AbstractFFTsExt = "AbstractFFTs"
+    ChainRulesCoreExt = "ChainRulesCore"
+    CovarianceEstimationExt = "CovarianceEstimation"
+    InvertedIndicesExt = "InvertedIndices"
+    LazyStackExt = "LazyStack"
+    OffsetArraysExt = "OffsetArrays"
+    StatisticsExt = "Statistics"
+    StatsBaseExt = "StatsBase"
+
+    [deps.AxisKeys.weakdeps]
+    AbstractFFTs = "621f4979-c628-5d54-868e-fcf4e3e8185c"
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    CovarianceEstimation = "587fd27a-f159-11e8-2dae-1979310e6154"
+    InvertedIndices = "41ab1584-1d38-5bbf-9106-f11c6c58b48f"
+    LazyStack = "1fad7336-0346-5a1a-a56f-a06ba010965b"
+    OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
+    Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+    StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [[deps.BangBang]]
 deps = ["Compat", "ConstructionBase", "InitialValues", "LinearAlgebra", "Requires", "Setfield", "Tables"]
@@ -1906,6 +2605,25 @@ git-tree-sha1 = "6d42eca6c3a27dc79172d6d947ead136d88751bb"
 uuid = "86f7a689-2022-50b4-a561-43c23ac3c673"
 version = "0.10.0"
 
+[[deps.NamedDims]]
+deps = ["LinearAlgebra", "Pkg", "Statistics"]
+git-tree-sha1 = "90178dc801073728b8b2d0d8677d10909feb94d8"
+uuid = "356022a1-0364-5f58-8944-0da4b18d706f"
+version = "1.2.2"
+
+    [deps.NamedDims.extensions]
+    AbstractFFTsExt = "AbstractFFTs"
+    ChainRulesCoreExt = "ChainRulesCore"
+    CovarianceEstimationExt = "CovarianceEstimation"
+    TrackerExt = "Tracker"
+
+    [deps.NamedDims.weakdeps]
+    AbstractFFTs = "621f4979-c628-5d54-868e-fcf4e3e8185c"
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    CovarianceEstimation = "587fd27a-f159-11e8-2dae-1979310e6154"
+    Requires = "ae029012-a4dd-5104-9daa-d747884805df"
+    Tracker = "9f7883ad-71c0-57eb-9f7f-b5c9e6d3789c"
+
 [[deps.NamedTupleTools]]
 git-tree-sha1 = "90914795fc59df44120fe3fff6742bb0d7adb1d0"
 uuid = "d9ec5142-1e00-5aa0-9d6a-321866360f50"
@@ -2013,6 +2731,17 @@ deps = ["OrderedCollections", "UnPack"]
 git-tree-sha1 = "34c0e9ad262e5f7fc75b10a9952ca7692cfc5fbe"
 uuid = "d96e819e-fc66-5662-9728-84c9c7592b0a"
 version = "0.12.3"
+
+[[deps.ParetoSmooth]]
+deps = ["AxisKeys", "LinearAlgebra", "LogExpFunctions", "MCMCDiagnosticTools", "NamedDims", "PrettyTables", "Printf", "Random", "Requires", "Statistics", "StatsBase"]
+git-tree-sha1 = "ffb25abb77780fd8f0bc3ae544ef6de3b917ccd0"
+uuid = "a68b5a21-f429-434e-8bfa-46b447300aac"
+version = "0.7.8"
+weakdeps = ["DynamicPPL", "MCMCChains"]
+
+    [deps.ParetoSmooth.extensions]
+    ParetoSmoothDynamicPPLExt = ["DynamicPPL", "MCMCChains"]
+    ParetoSmoothMCMCChainsExt = "MCMCChains"
 
 [[deps.ParetoSmoothedImportanceSampling]]
 deps = ["CSV", "DataFrames", "Distributions", "JSON", "Printf", "Random", "Statistics", "StatsFuns", "Test"]
@@ -3031,7 +3760,9 @@ version = "1.4.1+1"
 # ╠═d9015225-b635-42ad-ae96-fe7772a031b7
 # ╠═b5f71893-a54a-4b2d-824c-27593a8dd781
 # ╠═727e041b-fe08-4f7d-ad19-e3c57772c967
+# ╟─a9a95df8-797c-4d43-b043-4e6b10fc4246
 # ╠═078fdb65-5bd6-4b0d-b672-617f5912480d
+# ╟─7fb1e6fa-1881-44a3-a409-cdb632b8e4e9
 # ╠═f00222ef-b0d3-4464-87ef-6da1adbb54ac
 # ╟─c199328f-81af-4e7c-8fa9-fac5fbeedc8a
 # ╠═72bdf4a7-9563-4495-9f0c-72b43a76e8a8
@@ -3039,17 +3770,19 @@ version = "1.4.1+1"
 # ╠═f8682d46-7ee7-4fd2-a64f-c783360572e1
 # ╠═4ace5da6-a36e-4d92-856d-2409238ccaa1
 # ╠═41e60936-8367-4b04-9bb8-df9fb517a51f
+# ╟─195af951-1ed0-420c-a939-e7883f8fd618
 # ╠═93e9248c-2c0b-474c-aa9f-e9c66dcb6a00
 # ╠═4c26c5a1-55e2-4007-9085-96ee776e7ebe
 # ╠═ee759da7-cc6d-4fd2-8630-e29b323027c4
 # ╟─5141dfdf-490d-479e-ac58-63c929ae8fd1
 # ╟─611c3828-f01f-4721-830b-736b28620e7e
 # ╠═ad511be2-fd88-4aba-a830-21e242d994f1
-# ╟─4ee38b80-aded-40af-93ac-11a4ac2b9378
-# ╠═5c7f1f26-02ac-4325-a06c-8c26c75e6cf4
 # ╟─5a2f79ca-2d3e-4cd4-9de9-7c7e283a5052
 # ╠═94b5539b-4374-40b8-9501-8d3df49f20c3
 # ╠═c47284e8-7686-49c8-8d10-2a8460f673cd
+# ╠═ed2f98b3-34bf-4ce5-9ef7-ef3a5499e8ff
+# ╠═6c96a6c6-df1d-4dda-8d1d-49b7d13314c4
+# ╠═7994aea2-7b06-47cc-86f2-6afcda5a1707
 # ╠═0479f514-1b96-4115-beaa-35a96c40a1d7
 # ╠═9a1a6b7f-8810-4a14-910a-2ff422de4289
 # ╠═788ea3c8-d94d-4201-b860-3f085f18f9e2
@@ -3067,6 +3800,8 @@ version = "1.4.1+1"
 # ╠═85bb82da-efe7-4b34-8af5-cf60ae6e4757
 # ╟─53806285-ea68-4f5c-b3fb-a382a894ec56
 # ╠═59b9a24b-6967-418b-a4f8-e67ceb0a5474
+# ╠═74b85675-515a-4168-9739-8e8eeb42dab1
+# ╠═f4d22dcc-81e8-4279-9eb3-861f0eeb5f83
 # ╟─ed541621-2245-49f9-9672-31e20b9b7765
 # ╟─47d9566c-93ec-4f70-b7b6-5586193bcdef
 # ╠═1e5a39c0-6b5b-4d29-826e-e68c31c8f34e
@@ -3079,6 +3814,7 @@ version = "1.4.1+1"
 # ╠═bf763ccd-2c72-4529-b6ac-747f39f1b9cf
 # ╠═ef2e821a-d947-40e1-9855-79819aec5dbb
 # ╠═e1e48fb9-bb0f-4fe6-a34e-46ea2ced2510
+# ╟─e259cf96-eb70-4fe7-9c25-1f25686b1faa
 # ╠═bff2a56e-e799-4d50-b97b-79983df86565
 # ╠═5c26fd02-6695-4f3d-8f17-37c9b2ada2e6
 # ╟─941248e9-c1ec-4d6a-8a2a-dbdd9aee17d8
@@ -3105,5 +3841,92 @@ version = "1.4.1+1"
 # ╠═0caec6f7-af0d-4d89-b682-763c1e14af93
 # ╠═63ca60f4-f5c6-4928-86bb-f6d131654bc4
 # ╠═adb89664-66d8-4dbb-8f42-6043dcc09109
+# ╟─fda881bd-9075-41be-b59d-b930f5444095
+# ╠═9904cc2f-02f1-44d7-9831-fcefe95fe71d
+# ╟─662b087b-b302-4ecb-95a9-cd696a74fcbc
+# ╠═a09a81fb-580d-45d5-9893-121a22a3555f
+# ╟─d3389c26-f9dd-4349-8d0b-4f3f9bb93b91
+# ╠═f17ea741-c98f-4c88-94d2-03a3ca0d08fe
+# ╠═640bc9cb-0967-4a18-8e1d-5a3ed4a9b33c
+# ╟─9ae21be4-07ce-4ac9-ab58-4637ffd2281e
+# ╠═78449377-ffcd-41da-8466-d2059c3d406a
+# ╠═c10300fb-72a0-4668-8bb4-fa4be69b03c7
+# ╠═1e502519-f1ed-4c83-ba8d-d96e66269d4e
+# ╟─124a5a18-3a96-4394-9836-aa13266a936e
+# ╠═823b783e-f114-427e-b4b4-f135eec09d86
+# ╟─3d481718-a252-4f1c-9db9-289bd659982b
+# ╠═c62dcfeb-fdb8-4d5d-a51d-286caddf4e00
+# ╠═ab263a84-4612-4459-bf50-78bf0f236e44
+# ╟─8b225437-50c2-40f8-aa10-0e0c1b64fa5b
+# ╟─410933c5-0353-4060-9879-d08a84bb66df
+# ╟─45d6b219-852b-4941-a09e-2128dfc88939
+# ╠═f6516e63-a3f0-4bcb-a8ee-579ca95a95c3
+# ╠═77c257c8-d4f4-4f33-9038-7f33123c5951
+# ╠═fe4d08db-f84f-44ae-8499-5ef349e5806f
+# ╠═fdad6aeb-79c0-4db5-8ac0-15b14444a679
+# ╠═9f8aaf9c-8f23-4d90-b235-5d953713546e
+# ╠═c41a1a22-36e7-46c8-88a7-04c8283fe681
+# ╠═bc123b91-16a7-47c1-b4ed-241412065d27
+# ╟─aa3e88f8-5802-48f8-b4dc-a0655ad38ffb
+# ╠═41138aaa-52fb-467c-89a4-37edc46f170e
+# ╟─aed57454-46c0-4abe-b0f7-8b03b8a78d48
+# ╠═b8543e08-fb9d-442d-b3c3-93710660bb54
+# ╟─7a2a581a-65a4-4d1f-96a0-03621d8694f0
+# ╠═0bcd703f-3f33-471e-9a9f-e0fafcbb14ea
+# ╟─ded8c2cc-498f-4717-89f1-73b1ad8bef16
+# ╠═07e15ebd-d4c3-4960-9af7-59eff42cdd05
+# ╟─e48c366c-ed2b-4005-9d0b-aa77d7bae51d
+# ╠═31774687-7bbb-4474-affe-7aa0e6d6635f
+# ╟─55069810-e31b-43bf-9af4-cb4d4594f788
+# ╠═1bf4d82f-f083-45b1-89b8-b14b3cfde07a
+# ╟─f49b25b8-06d0-4f11-948d-b12e74ea665d
+# ╠═73baf70d-c5b3-4104-9075-f1376858143b
+# ╟─cec77f99-48ea-4a81-9a72-bcff3574bf12
+# ╠═bcb4b829-939c-48ac-96a3-7b6d53367c7f
+# ╟─47f11b04-e951-4c42-822b-18baa6b34766
+# ╠═3853f959-3ffe-4f4f-bb9f-5501845f40c9
+# ╟─2f218914-d9e0-45cd-b9fd-89e35bfcdcc9
+# ╠═76b82e84-62bc-43e4-8d39-f96ce0e82ca1
+# ╟─5197af99-c495-4193-8b10-58df5a1756a2
+# ╠═5f6fd968-7dc7-40f8-918c-7d07a0dbed97
+# ╟─d4f685d5-10da-4597-b987-267d47e23c90
+# ╠═0f333241-27fd-44d5-9499-2329414b5340
+# ╟─b1b3d896-b1a6-4684-b0d2-3116d7ba76f0
+# ╟─15a2f5fe-da00-4524-9462-a9b91e9b71d2
+# ╠═2c51f054-46d1-41c6-8d9d-05e4f9b2fc0d
+# ╠═c09d043f-566b-43c5-bf90-82e14d682a7b
+# ╠═8b3ec669-e0f1-4fbf-a8b9-066fc4faa5d3
+# ╠═02b0e6c8-12ba-46ee-a703-7b7f507560d6
+# ╠═d33289fb-ff49-41c5-bf68-0472e92a6800
+# ╟─896b01ce-9e16-42e3-876e-568011faf107
+# ╠═29d5a336-ea7e-4ae7-b001-0d2fef59c85b
+# ╟─b38c9b77-11ea-457e-9e94-aea8601c339f
+# ╠═67ef36b0-7244-42ee-a7ad-bbecad0cb567
+# ╠═2dacd63f-b12a-461f-8509-ac557744d612
+# ╠═c6535255-66dd-4d99-bd31-19e67f8ba055
+# ╠═69e5abc8-4e53-4842-8cf2-5fc0bf6b900c
+# ╟─59b23c71-f172-4aa5-ad3e-2f1b0876188f
+# ╠═2106ac11-33de-4673-bc1f-32ecb57089f6
+# ╠═048318ba-f836-4cdf-9e73-7a785c736297
+# ╠═f73d822c-a815-4a35-b0cf-c11c0c30c6ce
+# ╠═32ecb432-7176-4aa3-9369-b5de15634bdc
+# ╠═7ec1588b-54fb-4803-9e21-2dd9e79ba7c9
+# ╠═69510bfa-79c0-4bca-87dc-4ec7b8ed94af
+# ╠═5792f4ff-f1bd-48bb-968a-0ebc1a3b4c53
+# ╠═39dbf2e7-13fa-4c21-800e-80d7af55d03e
+# ╠═76c05007-037d-48d9-86b7-9f37a799e546
+# ╠═63eb903d-c425-46a0-8433-c80af6470bb1
+# ╠═ff0a1377-9d07-4d88-a06c-38a91a6b12d1
+# ╠═a931dd64-2491-4a11-af2e-0901041bb0be
+# ╠═cd4ce03c-84f1-4678-b74d-3e98ed510300
+# ╟─4f211432-0c05-4a47-a9ae-01d67a3f6c4a
+# ╠═200694d2-400b-4510-b232-a3e3e8238ae5
+# ╟─030db799-b6e1-458d-814e-be806dd296dc
+# ╠═edacad84-bc81-4dc0-94e5-5cd2809bdae2
+# ╠═a8caa1df-141f-4665-a864-9ae960682c80
+# ╠═de16bb86-0468-4db3-a085-cf11d437db17
+# ╠═fc186a6d-7afa-43f1-9545-c14399a6d708
+# ╠═3c752715-c8e0-473d-b70a-7769fee640e1
+# ╟─20a3bb3c-04b5-42dd-8013-3f689d782d00
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
