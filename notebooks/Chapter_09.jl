@@ -32,6 +32,17 @@ md"# Chapter 9. Markov Chain Monte Carlo."
 # ╔═╡ 27ccfbc2-8275-4fc1-a548-477362ab7122
 versioninfo()
 
+# ╔═╡ 1ddb557d-c255-446b-a257-d10a00d54f15
+html"""<style>
+main {
+    margin: 0 auto;
+    max-width: 90%;
+    padding-left: max(50px, 1%);
+    padding-right: max(253px, 10%);
+    # 253px to accomodate TableOfContents(aside=true)
+}
+"""
+
 # ╔═╡ a60e0266-b699-4e61-8e22-2cb8d5844415
 begin
   PlutoUI.TableOfContents()
@@ -3052,6 +3063,7 @@ version = "1.4.1+1"
 # ╔═╡ Cell order:
 # ╟─e803d172-2b8a-43b4-b99d-307e64cf29d5
 # ╠═27ccfbc2-8275-4fc1-a548-477362ab7122
+# ╠═1ddb557d-c255-446b-a257-d10a00d54f15
 # ╠═4b348c51-c844-4e64-85e4-a4f7ea952fc9
 # ╠═a60e0266-b699-4e61-8e22-2cb8d5844415
 # ╠═75ce54b9-b801-412a-b70e-ab5222df137f

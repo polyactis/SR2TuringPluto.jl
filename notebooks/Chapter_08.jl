@@ -5,13 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ bddf36ac-5547-491c-94bb-763ce7df3cd9
-using Pkg, DrWatson
-
-# ╔═╡ 33980d46-1e51-4f8d-b52d-48693b0f225f
-begin
-  using PlutoUI
-  TableOfContents()
-end
+using Pkg, DrWatson, PlutoUI
 
 # ╔═╡ 7bf4154b-0009-46e4-9d03-8e3b81a202f2
 begin
@@ -37,6 +31,20 @@ md"# Chap 8 Conditional Manatees"
 
 # ╔═╡ a1823c40-f21d-4c64-8ba5-b899007b4d0f
 versioninfo()
+
+# ╔═╡ 93ce659f-946e-4021-9322-b339e8bb919d
+html"""<style>
+main {
+    margin: 0 auto;
+    max-width: 90%;
+    padding-left: max(50px, 1%);
+    padding-right: max(253px, 10%);
+    # 253px to accomodate TableOfContents(aside=true)
+}
+"""
+
+# ╔═╡ 33980d46-1e51-4f8d-b52d-48693b0f225f
+PlutoUI.TableOfContents()
 
 # ╔═╡ 8720cc1f-58a0-4a70-9497-480456b26f85
 begin
@@ -3049,6 +3057,7 @@ version = "1.4.1+1"
 # ╟─ddc7d59a-5810-405f-8019-357494f783dd
 # ╠═a1823c40-f21d-4c64-8ba5-b899007b4d0f
 # ╠═bddf36ac-5547-491c-94bb-763ce7df3cd9
+# ╠═93ce659f-946e-4021-9322-b339e8bb919d
 # ╠═33980d46-1e51-4f8d-b52d-48693b0f225f
 # ╠═7bf4154b-0009-46e4-9d03-8e3b81a202f2
 # ╠═8720cc1f-58a0-4a70-9497-480456b26f85
