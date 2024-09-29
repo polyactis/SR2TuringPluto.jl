@@ -1,14 +1,12 @@
 ### A Pluto.jl notebook ###
-# v0.19.40
+# v0.19.41
 
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ 2b447c25-cc6e-4b40-a18a-fcab8eb64d8e
-using Pkg, DrWatson
-
 # ╔═╡ 5ad08e18-1ae9-4b05-a797-ef92940bfdeb
 begin
+  using Pkg, DrWatson
   using PlutoUI
   TableOfContents()
 end
@@ -30,6 +28,9 @@ begin
 	using FreqTables
 	using Logging
 end
+
+# ╔═╡ fada3494-c2c8-419a-a82e-4b0d07800e3f
+md"# Chap 12: Monsters and Mixtures"
 
 # ╔═╡ ed4820bb-9d68-4b65-b895-8971a1ae68c4
 versioninfo()
@@ -54,27 +55,68 @@ begin
 end
 
 # ╔═╡ 7c87ccc8-8b76-45f1-b10f-b04bba307ce9
-md" ## 12.1 Over-dispersed counts"
+md" # 12.1 Over-dispersed counts"
 
 # ╔═╡ 5be273e4-faae-4f06-934c-a1da019e8b89
-md" #### Code 12.1"
+md" ## Code 12.1 Alias for Beta and BetaBinomial to conform to the parameterization of the book.
+
+
+- define alias for Beta(α, β), see: https://en.wikipedia.org/wiki/Beta_distribution#Mean_and_sample_size
+- μ is the average probability.
+- ν is shape parameter, describing how spread out the distribution is.
+- ν=2, every probability from 0 to 1 is equally likely.
+  - As it increases above 2, the distribution of probabilities grows more concentrated.
+
+The following BetaBinomial2 reparametrization has a problem. Solution is to split beta and binomial.:
+
+```julia
+DomainError with Dual{ForwardDiff.Tag{Turing.TuringTag, Float64}}(0.0,0.0,0.0,0.0):
+
+BetaBinomial: the condition β > zero(β) is not satisfied.
+
+Stack trace
+Here is what happened, the most recent locations are first:
+
+#85 @ betabinomial.jl:30
+check_args @ utils.jl:89
+#BetaBinomial#84 @ betabinomial.jl:30
+BetaBinomial @ betabinomial.jl:29
+
+BetaBinomial2(n::Int64, μ::ForwardDiff.Dual{ForwardDiff.Tag{Turing.TuringTag, Float64}, Float64, 3}, ν::ForwardDiff.Dual{ForwardDiff.Tag{Turing.TuringTag, Float64}, Float64, 3}) @ Other cell: line 8
+
+```
+"
 
 # ╔═╡ 1651ab99-e88a-40b7-9092-daf7f31e5604
 begin
-	# define alias for Beta(α, β), see: https://en.wikipedia.org/wiki/Beta_distribution#Mean_and_sample_size
-	Beta2(μ, ν) = Beta(μ*ν, (1-μ)*ν)
-	BetaBinomial2(n, μ, ν) = BetaBinomial(n, μ*ν, (1-μ)*ν)
+  Beta2(μ, ν) = Beta(μ*ν, (1-μ)*ν)
+  BetaBinomial2(n, μ, ν) = BetaBinomial(n, μ*ν, (1-μ)*ν)
+end
+
+
+# ╔═╡ 20a899f1-3b0d-4fab-aef9-0c4abc6b95ea
+let
+	using MethodAnalysis
+	m = @which Base.rand(Beta2(0.4, 3))
+	methodinstances(m)
 end
 
 # ╔═╡ fdd7dad1-facd-4ce3-9a72-20ce2c4cbe6a
 let
 	p̄ = 0.5
-	θ = 5
-	plot(Beta2(p̄, θ), xlab="probability", ylab="Density")
+	θ = 1 ; p_1 = plot(Beta2(p̄, θ), xlab="probability", ylab="Density", title=" θ=$(θ)")
+	θ = 2 ; p_2 = plot(Beta2(p̄, θ), xlab="probability", ylab="Density", title=" θ=$(θ)")
+	θ = 3 ; p_3 = plot(Beta2(p̄, θ), xlab="probability", ylab="Density", title=" θ=$(θ)")
+	θ = 4 ; p_4 = plot(Beta2(p̄, θ), xlab="probability", ylab="Density", title=" θ=$(θ)")
+	θ = 7 ; p_7 = plot(Beta2(p̄, θ), xlab="probability", ylab="Density", title=" θ=$(θ)")
+	θ = 9 ; p_9 = plot(Beta2(p̄, θ), xlab="probability", ylab="Density", title=" θ=$(θ)")
+	
+	plot(p_1, p_2, p_3, p_4, p_7, p_9, layout=(3,2), 
+    	left_margin=5*Plots.mm, bottom_margin=5*Plots.mm, size=(1200,800) )
 end
 
 # ╔═╡ 86d02852-70e2-4fcc-bc8c-8d2b881fa248
-md" #### Code 12.2"
+md" ## Code 12.2 `m12_1`: Fit the UCB admission rate ~ gender x dept, rate for each gender, shape parameter for each dept x gender combination"
 
 # ╔═╡ f2af75cc-361e-4a45-a1b4-14a4ce404fa3
 begin
@@ -82,11 +124,18 @@ begin
 	ucbadmit.gid = @. ifelse(ucbadmit.gender == "male", 1, 2)
 end;
 
+# ╔═╡ 8abc7b8d-2c3c-42fa-b81c-e84f63b6c0c4
+ucbadmit
+
 # ╔═╡ 8d1b576f-e2a4-423d-80cc-0e69f6a376d4
 @model function m12_1(A, N, gid)
     a ~ MvNormal([0, 0], 1.5)
     p̄ = @. logistic(a[gid])
     ϕ ~ Exponential(1)
+	#make sure p̄ is ∈ [0.001, 0.999]. otherwise β=(1-p̄)ϕ can be zero or negative. 
+	# Turing MCMC will fail.
+	clamp!(p̄, 0.001, 0.999)
+	ϕ = clamp(ϕ, 0.001, Inf)
     θ = ϕ + 2
     @. A ~ BetaBinomial2(N, p̄, θ)
 end
@@ -94,28 +143,87 @@ end
 # ╔═╡ 9ce82e0e-bdcf-426c-b87e-32346c658b87
 begin
 	Random.seed!(1)
-	m12_1_ch = sample(m12_1(ucbadmit.admit, ucbadmit.applications, ucbadmit.gid), NUTS(), 1000)
-	m12_1_df = DataFrame(m12_1_ch);
+	# m12_1 does not work because BetaBinomial2() has problem in ForwardDiff
+	@time m12_1_orig_ch = sample(m12_1(ucbadmit.admit, ucbadmit.applications, ucbadmit.gid), NUTS(), 1000)
+	m12_1_orig_df = DataFrame(m12_1_orig_ch);
+end
+
+# ╔═╡ 2a46e189-6f9f-4a11-ab1e-528a5fb9bb91
+begin
+	m12_1_orig_df.θ = m12_1_orig_df.ϕ .+ 2
+	# da = difference between two genders (a)
+	m12_1_orig_df.da = m12_1_orig_df."a[1]" .- m12_1_orig_df."a[2]"
+	describe(m12_1_orig_df)
+end
+
+# ╔═╡ 5d754ff0-9c44-4e36-a29f-dc4e96d9478b
+md"### 12.2.1 `m12_1a`: Split BetaBinomial2 to be Beta2 + Binomial to avoid Beta's β=zero and AutoDiff failure.
+- Achieve similar results as `m12_1`, and exposed more parameters (rate per gender x dept)"
+
+
+# ╔═╡ c088a05d-ca70-400d-8906-f6a4c5e3ad3a
+@model function m12_1a(admit_num_vec, app_num_vec, gid, ::Type{T}=Vector{Float64} ) where {T}
+	# Use Beta2 + Binomial, instead of BetaBinomial2
+	N = length(app_num_vec)
+
+	a ~ MvNormal([0, 0], 1.5)
+	p̄ = @. logistic(a[gid])
+	ϕ ~ Exponential(1)
+	#Make sure shape/dispersion of Beta is >=2.
+	θ = ϕ + 2  # θ will not be part of chain output.
+	#array of average admission probabilities
+    r_v = T(undef, N)
+	for i in 1:N
+		r_v[i] ~ Beta2(p̄[i], θ)
+		admit_num_vec[i] ~ Binomial(app_num_vec[i], r_v[i])
+	end
+end
+
+# ╔═╡ 21d4c002-c870-48d8-9db4-2f4bb351730c
+begin
+    Random.seed!(1)
+    @time m12_1a_ch = sample(m12_1a(ucbadmit.admit, ucbadmit.applications, ucbadmit.gid), NUTS(), 1000)
+    m12_1_df = DataFrame(m12_1a_ch);
 end
 
 # ╔═╡ b339874c-e364-4f8c-bd62-5d66b175f0be
-md" #### Code 12.3"
+md" ## Code 12.3 Contrast between two genders
+- da is difference of parameter `a` (logodds between admission and inadmissoin) between two genders."
 
 # ╔═╡ 50661b7a-3484-4c52-b87c-4f44f119e164
-let
+begin
 	m12_1_df.θ = m12_1_df.ϕ .+ 2
+	# da = difference between two genders (a)
 	m12_1_df.da = m12_1_df."a[1]" .- m12_1_df."a[2]"
 	describe(m12_1_df)
 end
 
 # ╔═╡ 4335575b-2ce8-41f0-a7ed-295789a5b723
-md" #### Code 12.4"
+md" ## Code 12.4 Distribution of female & male admission rates
+- Black line is posterior mean admission rate for the gender.
+- Other lighter lines are based on the first 50 estimates of a[gid] and θ.
+- Lots of variation among departments."
 
 # ╔═╡ c8959699-8886-423a-b994-3180c639de1b
 let
 	gid = 2
 	p̄ = m12_1_df[:, "a[$gid]"] .|> logistic |> mean
-	θ = mean(m12_1_df.θ)
+	θ = mean(m12_1_df[!, :θ])
+	plot(Beta2(p̄, θ), lw=2, c=:black, ylab="Density", 
+	    xlab="probability admit", ylims=(0, 3))
+	
+	for (a, θ) ∈ first(zip(m12_1_df[:, "a[$gid]"], m12_1_df.θ), 50)
+	    plot!(Beta2(logistic(a), θ), c=:black, alpha=0.2)
+	end
+	gender = gid == 2 ? "female" : "male"
+	title!("distribution of $gender admission rates")
+end
+
+# ╔═╡ 2e246223-2a63-4d63-888a-2ea892ffd192
+let
+	gid = 1
+	p̄ = m12_1_df[:, "a[$gid]"] .|> logistic |> mean
+	θ = mean(m12_1_df[!, :θ])
 	plot(Beta2(p̄, θ), lw=2, c=:black, ylab="Density", 
 	    xlab="probability admit", ylims=(0, 3))
 	
@@ -127,10 +235,54 @@ let
 end
 
 # ╔═╡ 7959fa22-560e-44d0-96ee-d2e7bf51cbf9
-md" #### Code 12.5"
+md" ## Code 12.5 Posterior estimates vs the observed admit rates"
+
+# ╔═╡ c27a8622-edca-4f19-91d0-1682ebc9cc7d
+"""
+Sample the number of admissions given the number of applications, gender, and parameter (`a`, `θ`) estimates.
+"""
+sample_num_admit = (row_param, (N, gid)) -> begin
+    p̄ = logistic(get(row_param, "a[$gid]", 0))
+	#use Base.rand instead of rand
+	rate = Base.rand(Beta2(p̄, row_param[:θ]))
+	Base.rand(Binomial(N, rate))
+    #rand(BetaBinomial2(N, p̄, row_param[:θ]))
+end
+
+# ╔═╡ c799de28-efa8-4466-812f-ac3c79b5d835
+let
+	#import Distributions: logpdf, rand
+
+	Random.seed!(1)
+	adm_rate_obs = ucbadmit.admit ./ ucbadmit.applications
+	@show size(adm_rate_obs)
+	pred_adm = link(m12_1_df, sample_num_admit, zip(ucbadmit.applications, ucbadmit.gid))
+	@show size(pred_adm)
+	pred_rates = pred_adm ./ ucbadmit.applications
+	@show size(pred_rates)
+
+	μ_adm = mean.(pred_rates)
+	@show size(μ_adm)
+	σ = std.(pred_rates) ./ 2
+	ci_adm = PI.(pred_rates)
+	@show size(ci_adm)
+	
+	scatter(adm_rate_obs, mc=:deepskyblue,
+		xlab="case (gender x department)", xminorticks=5,
+		ylab="Admission rate", 
+		title="Posterior estimates vs the observed admit rates(blue)")
+	scatter!(μ_adm, mc=:white, yerr=σ)
+	scatter!(first.(ci_adm), shape=:cross, c=:black)
+	scatter!(last.(ci_adm), shape=:cross, c=:black)
+end
 
 # ╔═╡ 7a9ad8dc-019d-4a32-b8b3-ee5a2703e609
-md" #### Code 12.6"
+md" ## Code 12.6 Use Negative-Binomial/Gamma-Poisson to replace Poisson to estimate #tools per island in the Kline dataset.
+- More dispersion.
+- Negative-Binomial/Gamma-Poisson: Poisson probabilities that are mixed with Gamma-distributed rates."
+
+# ╔═╡ 8105a970-a0bf-4333-8bed-48a5912e3fae
+md"### 12.6.1 Negative-Binomial"
 
 # ╔═╡ 5e3a0ec2-5066-4ab6-881d-af6113d23974
 begin
@@ -139,108 +291,151 @@ begin
 	kline.contact_id = ifelse.(kline.contact .== "high", 2, 1)
 end;
 
+# ╔═╡ 7b65c79d-c91f-4e7a-8b8b-570e612ca9e8
+first(kline, 5)
+
 # ╔═╡ 29167add-b592-4a1e-8742-88fa3264286d
 @model function m12_2(T, P, cid)
-    g ~ Exponential()
-    ϕ ~ Exponential()
+    gamma ~ Exponential()
+    ϕ ~ Exponential(1)
     a ~ MvNormal([1,1], 1)
-    b₁ ~ Exponential()
-    b₂ ~ Exponential()
+    b₁ ~ Exponential(1)
+    b₂ ~ Exponential(1)
     b = [b₁, b₂]
-    λ = @. exp(a[cid])*(P^b[cid]) / g
+    λ = @. exp(a[cid])*(P^b[cid]) / gamma
     p = 1/(ϕ+1)
     r = λ/ϕ
-    clamp!(r, 0.01, Inf)
-    p = clamp(p, 0.01, 1)
+	# Without clamp(), this error:
+	#   DomainError with Dual{ForwardDiff.Tag{Turing.TuringTag, Float64}}(0.0,NaN,NaN,NaN,NaN,NaN,NaN):
+	#   NegativeBinomial: the condition r > zero(r) is not satisfied.
+	# narrow r to be ∈ [0.001, ∞]
+    clamp!(r, 0.001, Inf)
+	# narrow p to be ∈ [0.001, 1]
+	# clamp! only works on AbstractArray while clamp works on either.
+    p = clamp(p, 0.001, 1.0)
     @. T ~ NegativeBinomial(r, p)
 end
 
 # ╔═╡ cc4b5a4e-c2c6-4295-b4ff-8f73e84fcd88
 begin
 	Random.seed!(1)
-	m12_2_ch = sample(m12_2(kline.total_tools, kline.population, kline.contact_id), NUTS(), 1000)
+	@time m12_2_ch = sample(m12_2(kline.total_tools, kline.population, kline.contact_id), NUTS(), 1000)
 	m12_2_df = DataFrame(m12_2_ch)
 	describe(m12_2_df)
 end
 
+# ╔═╡ d609970b-dbb2-443f-9c10-9ddaa5140d09
+md"### 12.6.2 Gamma-Poisson"
+
+# ╔═╡ 9c06b103-a77f-410f-918c-0e69ae139166
+@model function m12_2_GammaPoisson(num_tools_v, pop_size_v, cid, ::Type{T}=Vector{Float64} ) where {T}
+    gamma ~ Exponential(1)
+    ϕ ~ Exponential(1)
+    a ~ MvNormal([1,1], 1)
+    b₁ ~ Exponential(1)
+    b₂ ~ Exponential(1)
+    b = [b₁, b₂]
+	#arraydist
+	#b = filldist(Exponential(1), 2) # this is a product distribution (not array of distributions),
+	# unfit as cid is of type Vector{Int64}
+    λ = @. exp(a[cid])*(pop_size_v^b[cid]) / gamma
+	k = λ./ϕ
+    clamp!(k, 0.01, Inf)
+    #p = 1/(ϕ+1)
+    #r = λ/ϕ
+    #clamp!(r, 0.01, Inf)
+    #p = clamp(p, 0.01, 1)
+	N = length(pop_size_v)
+	r_v = T(undef, N)
+	for i in 1:N
+		r_v[i] ~ Gamma(k[i], ϕ)
+    	num_tools_v[i] ~ Poisson(r_v[i])
+	end
+end
+
+# ╔═╡ afc90e44-5ad7-47b6-baa0-a321936816a2
+begin
+	Random.seed!(1)
+	@time m12_2_GP_ch = sample(m12_2_GammaPoisson(kline.total_tools, kline.population,
+		kline.contact_id), NUTS(), 1000)
+	m12_2_GP_df = DataFrame(m12_2_GP_ch)
+	describe(m12_2_GP_df)
+end
+
+# ╔═╡ 175c4bb5-2a80-4df9-b1f0-5a0a4eb83885
+md" In Chap 11, `m11_11` produces the following estiamtes:
+- a[1]: 0.8746
+- a[2]: 1.0074
+- b1: 0.2601
+- b2: 0.2743
+- gamma: 0.9163
+"
+
 # ╔═╡ 512a3b1f-2e79-4777-b976-6d310725e9f8
-md" ## 12.2 Zero-inflated outcomes"
+md" # 12.2 Zero-inflated outcomes"
 
 # ╔═╡ 91de0472-61b8-47f4-babb-e07539fa3a55
-md" #### Codes 12.7 & 12.8"
+md" ## Code 12.7 & 12.8 Simulate monks' drinking and working."
+
+# ╔═╡ 15d28187-c155-4332-bde4-90c2d40b7a36
+begin
+	# define parameters
+	prob_drink = 0.2 # 20% of days
+	rate_manuscripts = 1    # average 1 manuscript per day
+
+	# sample one year of production
+	total_num_days = 730
+
+	# simulate days monks drink
+	Random.seed!(365)
+	drink_indicator_vec = Random.rand(Binomial(1, prob_drink), total_num_days)
+
+	# simulate manuscripts completed
+	no_of_manu_per_day_vec = (1 .- drink_indicator_vec).*Random.rand(
+		Poisson(rate_manuscripts), total_num_days);
+	hist_plot = histogram(no_of_manu_per_day_vec, xlab="Manuscripts completed", 
+		ylab="Count", alpha=0.6)
+	@show no_of_zero_manu_days_due_to_drink = sum(drink_indicator_vec)
+	no_of_zero_manu_days_on_work = sum(@. (no_of_manu_per_day_vec == 0) & (drink_indicator_vec == 0))
+	bar!([0], [no_of_zero_manu_days_on_work], bar_width=0.3, alpha=0.6)
+	hist_plot
+end
 
 # ╔═╡ dc4292b2-5aa8-4413-b4a3-91456f1d1d2a
-md" #### Code 12.9"
+md" ## Code 12.9 `m12_3`: ZIPoisson (zero-inflated Poisson) model"
 
 # ╔═╡ 3288b258-640b-414f-90d4-0bc1517aa506
 # Based on this discussion
 # https://github.com/StatisticalRethinkingJulia/SR2TuringPluto.jl/issues/1
 
 # ╔═╡ 45e9dc3c-bd28-4eaf-a56a-d12f4804f341
-struct ZIPoisson{T1,T2} <: DiscreteUnivariateDistribution
-    λ::T1
-    w::T2
+struct ZIPoisson{T1, T2} <: DiscreteUnivariateDistribution
+	#Poisson rate (i.e. number of manuscripts per day)
+	λ::T1
+	zero_inflate_π::T2
 end
 
 # ╔═╡ ab414dc7-7f31-4b0a-9d65-1268940fbc50
-function logpdf(d::ZIPoisson, y::Int)
-    if y == 0
-        logsumexp([log(d.w), log(1 - d.w) - d.λ])
-    else
-        log(1 - d.w) + logpdf(Poisson(d.λ), y)
-    end
+begin
+import Distributions: logpdf #importing logpdf is important. Without it,
+#MCMC failed due to:
+#  MethodError: no method matching logpdf(::Main.var"workspace#149".ZIPoisson{Float64, Float64}, ::Int64)
+
+	function logpdf(d::ZIPoisson, y::Int)
+	if y == 0
+		# likelihood = p + (1-p)exp(-λ)
+		# logsumexp(X) = log(sum(exp, X))
+		logsumexp([log(d.zero_inflate_π), log(1 - d.zero_inflate_π) - d.λ])
+	else
+		# log-likelihood of data from non-inflating days
+		log(1 - d.zero_inflate_π) + logpdf(Poisson(d.λ), y)
+	end
+end
 end
 
 # ╔═╡ 0ebe4814-ce59-4354-87de-e80e540e355c
 function rand(d::ZIPoisson)
-    rand() <= d.w ? 0 : rand(Poisson(d.λ))
-end
-
-# ╔═╡ c27a8622-edca-4f19-91d0-1682ebc9cc7d
-fun = (r, (N, gid)) -> begin
-    p̄ = logistic(get(r, "a[$gid]", 0))
-    rand(BetaBinomial2(N, p̄, r.θ))
-end
-
-# ╔═╡ c799de28-efa8-4466-812f-ac3c79b5d835
-let
-	#import Distributions: logpdf, rand
-
-	Random.seed!(1)
-	adm_rate = ucbadmit.admit ./ ucbadmit.applications
-	pred_adm = link(m12_1_df, fun, zip(ucbadmit.applications, ucbadmit.gid))
-	pred_rates = pred_adm ./ ucbadmit.applications
-
-	μ_adm = mean.(pred_rates)
-	σ = std.(pred_rates) ./ 2
-	ci_adm = PI.(pred_rates)
-
-	scatter(adm_rate, xlab="case", ylab="A", title="Posterior validation check")
-	scatter!(μ_adm, mc=:white, yerr=σ)
-	scatter!(first.(ci_adm), shape=:cross, c=:black)
-	scatter!(last.(ci_adm), shape=:cross, c=:black)
-end
-
-# ╔═╡ 15d28187-c155-4332-bde4-90c2d40b7a36
-let
-	# define parameters
-	prob_drink = 0.2 # 20% of days
-	rate_work = 1    # average 1 manuscript per day
-
-	# sample one year of production
-	N = 365
-
-	# simulate days monks drink
-	Random.seed!(365)
-	drink = rand(Binomial(1, prob_drink), N)
-
-	# simulate manuscripts completed
-	y = (1 .- drink).*rand(Poisson(rate_work), N);
-	p = histogram(y, xlab="manuscripts completed", ylab="Frequency")
-	zeros_drink = sum(drink)
-	zeros_work = sum(@. (y == 0) & (drink == 0))
-	bar!([0], [zeros_work], bar_width=0.3)
-	p
+    rand() <= d.zero_inflate_π ? 0 : rand(Poisson(d.λ))
 end
 
 # ╔═╡ 9f5a39bc-9e1c-4f08-ba50-0cf87122358b
@@ -248,34 +443,49 @@ rand2(d::ZIPoisson, N::Int) = map(_->rand(d), 1:N)
 
 # ╔═╡ 73d535fd-227a-4c4b-a0ca-ed926ecf86c6
 @model function m12_3(y)
-    ap ~ Normal(-1.5, 1)
-    al ~ Normal(1, 0.5)
-    λ = exp(al)
-    p = logistic(ap)
-    y .~ ZIPoisson(λ, p)
+    zero_inflate_logodds ~ Normal(-1.5, 1)
+    log_rate ~ Normal(1, 0.5)
+    λ = exp(log_rate)
+    zero_inflate_π = logistic(zero_inflate_logodds)
+	N = length(y)
+	y .~ ZIPoisson(λ, zero_inflate_π)
+	# equivalent to the following
+	#for i in 1:N
+    #	y[i] ~ ZIPoisson(λ, zero_inflate_π)
+	#end
 end
 
 # ╔═╡ cb63530d-4041-4a53-92c7-73a5c5705564
 begin
-	m12_3_ch = sample(m12_3(y), NUTS(), 1000)
+	@time m12_3_ch = sample(m12_3(no_of_manu_per_day_vec), NUTS(), 1000)
 	m12_3_df = DataFrame(m12_3_ch)
-	precis(m12_3_df)
+	describe(m12_3_df)
 end
 
 # ╔═╡ 3b4f512c-7fc3-4eda-90a3-57d7ed313f87
-md" #### Code 12.10"
+md" ## Code 12.10 Posterior mean of `zero_inflate_π` (drinking probability) and rate of manuscripts per day on the natural scale."
 
 # ╔═╡ 719b6fe8-03e0-4e1d-8be8-6d642f78e86d
 let
-	m12_3_df.ap .|> logistic |> mean,
-	exp.(m12_3_df.al) |> mean
+	m12_3_df.zero_inflate_logodds .|> logistic |> mean,
+	exp.(m12_3_df.log_rate) |> mean
+end
+
+# ╔═╡ 93adee56-344e-48f3-82ed-ada5907903e0
+let
+	h_of_rate = histogram(exp.(m12_3_df.log_rate), bins=30,
+		xlabel="number of manuscripts per day while working")
+	h_of_zero_inflate = histogram(m12_3_df.zero_inflate_logodds .|> logistic, bins=30, 
+		xlabel="zero inflate π")
+	plot(h_of_zero_inflate, h_of_rate, layout=(1,2), 
+    left_margin=5*Plots.mm, bottom_margin=5*Plots.mm, size=(1000,500))
 end
 
 # ╔═╡ e3ea5e44-b189-4c2e-b7d0-5bdc26477ef8
-md" ## 12.3 Ordered categorical outcomes"
+md" # 12.3 Ordered categorical outcomes"
 
 # ╔═╡ 8c89b94a-3250-4abf-8eda-35fd2b42f708
-md" #### Code 12.12"
+md" ## Code 12.12 Load the trolley/box car data"
 
 # ╔═╡ a6bcc9c6-4be7-4390-9fa3-6a124ed8afc1
 begin
@@ -283,61 +493,96 @@ begin
 	describe(trolley)
 end
 
+# ╔═╡ dccb70d0-bfb9-4517-8aa1-b00f88e98810
+size(trolley)
+
+# ╔═╡ 823f4922-30f1-492a-97a9-28ecaaea210e
+first(trolley, 5)
+
+# ╔═╡ 6ac3c2f1-0cec-4546-9af8-66d490f9d37b
+#freqtable(trolley, :action, :contact, subset=trolley.intention .== 0)
+# no combinations with action=1, contact=1
+freqtable(trolley, :action, :contact)
+
+# ╔═╡ fdaa391e-e5bc-4cd2-8d04-7cb22250c159
+freqtable(trolley, :intention, :action)
+
+
+# ╔═╡ a5584d42-2318-4ea3-a423-b5465ac9cf26
+freqtable(trolley, :intention, :contact)
+
+
 # ╔═╡ cbf2db2b-5e72-4ad1-9fc3-0944c17db2df
-md" #### Code 12.13"
+md" ## Code 12.13 Fig 12.4a: Hist of categorical response 1-7."
 
 # ╔═╡ c1943565-d495-480d-86ce-ea6f4e760b53
 histogram(trolley.response, xlab="response")
 
 # ╔═╡ ee421d11-e00c-494c-a70b-f81c77745d21
-md" #### Code 12.14"
+md" ## Code 12.14 Fig 12.4b: Cumulative proportion of each response."
 
 # ╔═╡ 45fe0912-cbf9-4e82-bf7b-d60cb7aae79b
 let
+	# proportion of each response value
 	pr_k = counts(trolley.response) / length(trolley.response)
 	global cum_pr_k = cumsum(pr_k)
 	plot(cum_pr_k, m=:o, xlab="response", ylab="cumulative proportion")
 end
 
 # ╔═╡ 1dbce450-8de8-41a6-a4ef-fd59f3663664
-md" #### Code 12.15"
+md" ## Code 12.15 Fig 12.4c: Logarithm of cumulative odds of each response."
 
 # ╔═╡ cd0c7f24-ec98-432c-8444-397a9bf09d91
-round.(logit.(cum_pr_k), digits=2)
+let
+	@show log_cumu_odds = round.(logit.(cum_pr_k), digits=2)
+	# exclude the last Inf item on the plot.
+	plot(log_cumu_odds[1:end-1], m=:o,
+		xlabel="response", ylabel="log-cumulative-odds")
+end
 
 # ╔═╡ 67b42f0b-f991-43a9-8f9f-3a69ba540994
-md" #### Code 12.16"
+md" ## Code 12.16 `m12_4`: Ordered logistic with no predictor variable."
 
 # ╔═╡ 068fc2dc-213a-402f-a909-0b3bcdca4dd6
 @model function m12_4(R)
-    # to ensure sorted cutpoints, use deltas
+	# cutpoint ~ Normal(0. 1.5) in the book.
+	# to ensure sorted cutpoints, use deltas (6 of them)
     Δ_cutpoints ~ filldist(Exponential(), 6)
+	# Note -2 for each Δ_cutpoint to make sure each Δ_cutpoint is positive (Exponential()).
     cutpoints = -2 .+ cumsum(Δ_cutpoints)
+	# Increasing logits/log-odds for each category
+	# ϕ=0 to not use any predictor variable. Only intercept.
     R .~ OrderedLogistic(0, cutpoints)
 end
 
 # ╔═╡ 75aef58b-c087-4267-9c13-7bc1d90d1270
-md" #### Code 12.18"
+md" ## Code 12.18 Fit `m12_4`"
 
 # ╔═╡ 13ceb9f6-46ac-473d-abe0-9b543572e5f3
 begin
 	Random.seed!(1)
-	m12_4_ch = sample(m12_4(trolley.response), NUTS(), 1000)
+	@time m12_4_ch = sample(m12_4(trolley.response), NUTS(), 1000)
 	m12_4_df = DataFrame(m12_4_ch)
 	describe(m12_4_df)
 end
 
+# ╔═╡ 4136174a-e7c8-4d6e-a3c8-7ed5013228fb
+md" ## Code 12.19 Cumulative probabibility for each outcome/level"
+
 # ╔═╡ 69db6156-6e68-4f4c-8ede-18968858d455
 begin
-	cutpoints1 = -2 .+ cumsum(mean.(eachcol(m12_4_df[!,r"Δ.*"])))
+	@show cutpoints1 = -2 .+ cumsum(mean.(eachcol(m12_4_df[!,r"Δ.*"])))
 	round.(logistic.(cutpoints1), digits=3)
 end
 
-# ╔═╡ 4136174a-e7c8-4d6e-a3c8-7ed5013228fb
-md" #### Code 12.19"
+# ╔═╡ 107d08e3-2a51-42b9-a243-578a928571b9
+let
+	Δ_cutpoints1 = -2 .+ m12_4_df[!, "Δ_cutpoints[1]"]
+	histogram(logistic.(Δ_cutpoints1), bins=30, xlabel="probability of response level 1")
+end
 
 # ╔═╡ ba249ca4-a211-42e1-b66a-f2dd81c9b14f
-md" #### Code 12.20"
+md" ## Code 12.20 Probabiilty for each level"
 
 # ╔═╡ dba0e917-2bd6-4fa0-b6d4-1dad4968195a
 begin
@@ -346,13 +591,15 @@ begin
 end
 
 # ╔═╡ d0181605-1105-4fb8-8470-db8cdf3d6853
-md" #### Code 12.21"
+md"### Code 12.21 Average outcome/level"
 
 # ╔═╡ 3229c5f9-d341-4f5b-a24f-295e43437d5c
 sum(pk1.*(1:7))
 
 # ╔═╡ 696d62d7-0c39-454e-a01d-a66a54748910
-md" #### Code 12.22"
+md" ### Code 12.22 Probability for each level, after subtracting 0.5 from each cutpoint.
+- Probability shifts upwards towards higher outcome/level.
+- Effectively, it assigns less probability to lower outcome and thus assigns more prob to the highest outcome."
 
 # ╔═╡ 2403ce2f-7f96-4c68-9d31-80079e3daa36
 begin
@@ -361,13 +608,13 @@ begin
 end
 
 # ╔═╡ 2a6d6a27-68b9-4722-8d51-be470942f446
-md" #### Code 12.23"
+md" ### Code 12.23 Average outcome/level also increases a little bit."
 
 # ╔═╡ 23ab19cd-6fb4-4de1-b672-daa03a1228d4
 sum(pk.*(1:7))
 
 # ╔═╡ 476d4fbd-3cc5-4e78-91f8-e8022d38ffa0
-md" #### Code 12.24"
+md" ## Code 12.24 `m12_5` OrderedLogistic with predictor variables."
 
 # ╔═╡ d35f0ee3-e0b7-417f-8242-6e1a5d4114d6
 @model function m12_5(R, A, I, C)
@@ -375,23 +622,33 @@ md" #### Code 12.24"
     Δ_cutpoints ~ filldist(Exponential(), 6)
     cutpoints = -3 .+ cumsum(Δ_cutpoints)
     
-    bA ~ Normal(0, 0.5)
-    bI ~ Normal(0, 0.5)
-    bC ~ Normal(0, 0.5)
-    bIA ~ Normal(0, 0.5)
-    bIC ~ Normal(0, 0.5)
-    BI = @. bI + bIA*A + bIC*C
-    phi = @. bA*A + bC*C + BI*I
+    βA ~ Normal(0, 0.5)
+    βI ~ Normal(0, 0.5)
+    βC ~ Normal(0, 0.5)
+    βIA ~ Normal(0, 0.5)
+    βIC ~ Normal(0, 0.5)
+	# BI is interaction between Intention and Contact/Action
+    BI = @. βI + βIA*A + βIC*C
+    ϕ = @. βA*A + βC*C + BI*I
     
     for i in eachindex(R)
-        R[i] ~ OrderedLogistic(phi[i], cutpoints)
+		# P(Y=1) = 1-logistic(ϕ[i]-cutpoints[1])
+		# P(Y=2) = logistic(ϕ[i]-cutpoints[k-1])-logistic(ϕ[i]-cutpoints[k])
+		# P(Y=K) = logistic(ϕ[i]-cutpoints[K-1])
+		# same as described in book: log (p/(1-p)) = c[k] - ϕ[i] 
+		
+        R[i] ~ OrderedLogistic(ϕ[i], cutpoints)
     end
 end
+
+# ╔═╡ 7462eb3f-54ae-478b-818c-615007ef6a64
+parentmodule(OrderedLogistic)
 
 # ╔═╡ 3edf24f0-be2f-461d-b121-1392618a9c67
 begin
 	Random.seed!(2)
-	m12_5_ch = sample(m12_5(trolley.response, trolley.action, trolley.intention, trolley.contact), NUTS(), 1000)
+	@time m12_5_ch = sample(m12_5(trolley.response, trolley.action, trolley.intention,
+		trolley.contact), NUTS(), 1000)
 	m12_5_df = DataFrame(m12_5_ch)
 	describe(m12_5_df)
 end
@@ -403,19 +660,17 @@ let
 end
 
 # ╔═╡ 45a8ddb4-bc79-4cfe-a3cb-07f57f441399
-md" #### Code 12.25"
+md" ## Code 12.25 CI of coef estimates of co-variates on response."
 
 # ╔═╡ 8449ecae-5fd0-4c30-ba7c-582157e8d9ff
-coeftab_plot(m12_5_df, pars=[:bIC, :bIA, :bC, :bI, :bA])
+coeftab_plot(m12_5_df, pars=[:βIC, :βIA, :βC, :βI, :βA])
 
 # ╔═╡ b268b198-44af-44da-a895-e2c245117bb5
-md" #### Code 12.26"
+md" ## Code 12.26"
 
 # ╔═╡ c2a2c394-474a-4916-8e7d-5b81da7cffbe
 # (not needed, in fact)
-
-
-md" #### Code 12.27 & 12.28"
+md" ## Code 12.27 & 12.28. Cumulative Probability of intention at 0 to 1, with action=0 & contact=0"
 
 # ╔═╡ 3c0cdbef-6976-4b8a-8602-12706070827d
 let
@@ -424,18 +679,24 @@ let
 	kC = 0      # value for contact
 	kI = 0:1    # values for intention to calculate over
 	
-	rI_to_phi = (r, i) -> begin
-	    BI = r.bI + r.bIA*kA + r.bIC*kC
-	    r.bA*kA + r.bC*kC + BI*i
+	rI_to_ϕ = (r, intention) -> begin
+	    BI = r.βI + r.βIA*kA + r.βIC*kC
+	    r.βA*kA + r.βC*kC + BI*intention
 	end
 	
-	phi = link(m12_5_df, rI_to_phi, kI);
-	p = plot(xlab="intention", ylab="probability", xlim=(0, 1), ylim=(0, 1), title="action=$kA, contact=$kC")
-	for ri in 1:50
-	    r = m12_5_df[ri,:]
+	ϕ = link(m12_5_df, rI_to_ϕ, kI);
+	@show size(ϕ)
+	@show size(ϕ[1])
+
+	p = plot(xlab="intention", ylab="probability", xlim=(0, 1), ylim=(0, 1), 
+		title="action=$kA, contact=$kC")
+	for param_idx in 1:50
+	    r = m12_5_df[param_idx,:]
 	    cutpoints = -3 .+ cumsum(r[r"Δ.*"])
-	    pk1 = cumsum(pdf.(OrderedLogistic(phi[1][ri], cutpoints), 1:6))
-	    pk2 = cumsum(pdf.(OrderedLogistic(phi[2][ri], cutpoints), 1:6))
+		#ϕ[1]: intention=0
+		#ϕ[2]: intention=1
+	    pk1 = cumsum(pdf.(OrderedLogistic(ϕ[1][param_idx], cutpoints), 1:6))
+	    pk2 = cumsum(pdf.(OrderedLogistic(ϕ[2][param_idx], cutpoints), 1:6))
 	    for i ∈ 1:6
 	        plot!(kI, [pk1[i], pk2[i]], c=:gray, alpha=0.2)
 	    end
@@ -444,7 +705,7 @@ let
 end
 
 # ╔═╡ 173c19d7-f51b-4260-bf8e-922e66a02721
-md" #### Code 12.29"
+md" ## Code 12.29 Distribution of response for Intention=0 vs Intention=1"
 
 # ╔═╡ bf96a44b-6441-4045-ae92-6613fbbbc3bb
 let
@@ -453,30 +714,34 @@ let
 	kI = 0:1
 	
 	rI_to_dist = (r, i) -> begin
-	    BI = r.bI + r.bIA*kA + r.bIC*kC
-	    phi = r.bA*kA + r.bC*kC + BI*i
+	    BI = r.βI + r.βIA*kA + r.βIC*kC
+	    phi = r.βA*kA + r.βC*kC + BI*i
 	    cutpoints = -3 .+ cumsum(r[r"Δ.*"])
 	    OrderedLogistic(phi, cutpoints)
 	end
 	
 	Random.seed!(1)
-	s = simulate(m12_5_df, rI_to_dist, kI)
-	histogram(map(first, s), bar_width=0.5, label="I=0")
-	histogram!(map(last, s), bar_width=0.2, label="I=1")
+	# prob_v is a vector of size 1000. Each element is a tuple of simulated outcome/category given intention=0 or intention=1
+	prob_v = simulate(m12_5_df, rI_to_dist, kI)
+	@show size(prob_v)
+	@show size(prob_v[1])
+	
+	histogram(map(first, prob_v), bar_width=0.5, label="I=0")
+	histogram!(map(last, prob_v), bar_width=0.2, label="I=1")
 end
 
 # ╔═╡ c931b144-8b63-472a-8d4c-82be650f4593
-md" ## 12.4 Ordered categorical predictors"
+md" # 12.4 Ordered categorical predictors"
 
 # ╔═╡ 49bdc70e-a2d4-4238-98ac-d29b37577d80
-md" #### Code 12.30"
+md" ## Code 12.30 The number of distinct degrees"
 
 # ╔═╡ b7ab3333-355f-42f9-b3f6-b859b3e6922d
 #d = DataFrame(CSV.File("data/Trolley.csv"))
 levels(trolley.edu)
 
 # ╔═╡ 188ce9c3-9199-4768-9ad2-ed9201e563f2
-md" #### Code 12.31"
+md" ## Code 12.31 Assign an ordered categorical level to each education"
 
 # ╔═╡ 52233289-914f-4ca6-a943-9489c0158f70
 edu_l = Dict{String, Int}(
@@ -494,31 +759,32 @@ edu_l = Dict{String, Int}(
 trolley.edu_new = map(s -> edu_l[s], trolley.edu);
 
 # ╔═╡ eb1f70a1-42ec-4db0-b826-56bc5d4ce73b
-md" #### Code 12.32"
+md" ## Code 12.32 Simulate Dirichlet prior"
 
 # ╔═╡ 69afe200-63be-4a25-8b51-3a5ad992642a
 begin
 	Random.seed!(1805)
-	delta = rand(Dirichlet(7, 2), 10)
+	delta = Base.rand(Dirichlet(7, 2), 10)
 	
 	# Code 12.33
 	
 	h = 3
 	p = plot(xlab="index", ylab="probability")
 	for (idx, col) ∈ enumerate(eachcol(delta))
-	    plot!(col, c=:black, alpha=0.7, lw=idx == h ? 3 : 1, m= idx == h ? :v : :o)
+	    plot!(col, c=:black, alpha=0.7, lw= idx == h ? 3 : 1, m= idx == h ? :v : :o)
 	end
 	p
 end
 
 # ╔═╡ 6f3b01f6-b8bf-4a0e-9cc2-87c93071c9a3
-md" #### Code 12.34"
+md" ## Code 12.34 `m12_6`"
 
 # ╔═╡ 9535972c-0905-4c3a-b5b6-5656677f5d9c
 # Could take 20-30 minutes...
 
 @model function m12_6(R, action, intention, contact, E)
     delta ~ Dirichlet(7, 2)
+	#add 0, the intercept
     pushfirst!(delta, 0.0)
     
     bA ~ Normal()
@@ -540,30 +806,32 @@ md" #### Code 12.34"
 end
 
 # ╔═╡ 7b1d63fc-bfbf-4d3e-a069-c07c7a558ee2
-md" #### Code 12.35"
+md" ## Code 12.35 Fit the model"
 
 # ╔═╡ 859dee04-009b-4758-94ff-024a9f599509
 begin
 	m12_6t = m12_6(trolley.response, trolley.action, trolley.intention, trolley.contact, trolley.edu_new)
-	m12_6_ch = sample(m12_6t, NUTS(), 1000);
+	# too long to finish, comment it out
+	@time m12_6_ch = sample(m12_6t, NUTS(), 1000);
 	m12_6_df = DataFrame(m12_6_ch)
 	describe(m12_6_df)
 end
 
 # ╔═╡ 05c99479-f4c1-4f5f-9d92-da6b487ed00c
-md" #### Code 12.36"
+md" ## Code 12.36 Correlation plot of all education parameters.
+- Some college seems to have tiny incremental effect."
 
 # ╔═╡ a1a5b1fe-1b09-4dad-8ddd-c09bbb36699f
 let
 	delta_labels = ["Elem","MidSch","SHS","HSG","SCol","Bach","Mast","Grad"]
 	df = m12_6_df[!,r"delta.*"]
 	
-	corrplot(Matrix(df); seriestype=:scatter, bins=30, grid=false, ms=0.1, ma=0.8, 
+	@time corrplot(Matrix(df); seriestype=:scatter, bins=30, grid=false, ms=0.1, ma=0.8, 
 	    size=(1000,800), label=delta_labels)
 end
 
 # ╔═╡ 53a9552c-f8b8-4761-8258-0062cc2ac68c
-md" #### Code 12.37"
+md" ## Code 12.37 Education as an ordinary continuous variable."
 
 # ╔═╡ 1ac5a9e2-7e61-4f40-a8e2-c597a44bf090
 trolley.edu_norm = standardize(UnitRangeTransform, Float64.(trolley.edu_new))
@@ -588,8 +856,9 @@ end
 
 # ╔═╡ dffc67be-7ab2-49ba-a584-7877faed20d6
 begin
-	model = m12_7(trolley.response, trolley.action, trolley.intention, trolley.contact, trolley.edu_norm)
-	m12_7_ch = sample(model, NUTS(), 1000)
+	model = m12_7(trolley.response, trolley.action, trolley.intention,
+		trolley.contact, trolley.edu_norm)
+	@time m12_7_ch = sample(model, NUTS(), 1000)
 	m12_7_df = DataFrame(m12_7_ch)
 	describe(m12_7_df)
 end
@@ -603,6 +872,7 @@ Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 DrWatson = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
 FreqTables = "da1fdf0e-e0ff-5433-a45f-9bb5ff651cb1"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+MethodAnalysis = "85b6ec6f-f7df-4429-9514-a64bcd9ee824"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 ParetoSmooth = "a68b5a21-f429-434e-8bfa-46b447300aac"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
@@ -618,8 +888,9 @@ Turing = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
 CSV = "~0.10.12"
 DataFrames = "~1.6.1"
 Distributions = "~0.25.107"
-DrWatson = "~2.13.0"
+DrWatson = "~2.15.0"
 FreqTables = "~0.4.6"
+MethodAnalysis = "~0.4.13"
 Optim = "~1.8.0"
 ParetoSmooth = "~0.7.4"
 PlutoUI = "~0.7.59"
@@ -636,7 +907,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.2"
 manifest_format = "2.0"
-project_hash = "dbdb59ec8b8ab0eb158ffa639ecfa2344934e5cc"
+project_hash = "e5a7748c11f410ab6f5134a2498fc629d83dadd3"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "016833eb52ba2d6bea9fcb50ca295980e728ee24"
@@ -1244,9 +1515,9 @@ version = "1.6.0"
 
 [[deps.DrWatson]]
 deps = ["Dates", "FileIO", "JLD2", "LibGit2", "MacroTools", "Pkg", "Random", "Requires", "Scratch", "UnPack"]
-git-tree-sha1 = "f83dbe0ef99f1cf32b815f0dad632cb25129604e"
+git-tree-sha1 = "2d6e724fab0c57284b3d1a7473a5a62ce6aba471"
 uuid = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
-version = "2.13.0"
+version = "2.15.0"
 
 [[deps.DualNumbers]]
 deps = ["Calculus", "NaNMath", "SpecialFunctions"]
@@ -1986,6 +2257,12 @@ version = "2.28.2+1"
 git-tree-sha1 = "c13304c81eec1ed3af7fc20e75fb6b26092a1102"
 uuid = "442fdcdd-2543-5da2-b0f3-8c86c306513e"
 version = "0.3.2"
+
+[[deps.MethodAnalysis]]
+deps = ["AbstractTrees"]
+git-tree-sha1 = "c2ee9b8f036c951f9ed0a47503a7f7dc0905b256"
+uuid = "85b6ec6f-f7df-4429-9514-a64bcd9ee824"
+version = "0.4.13"
 
 [[deps.MicroCollections]]
 deps = ["BangBang", "InitialValues", "Setfield"]
@@ -3193,35 +3470,48 @@ version = "1.4.1+1"
 """
 
 # ╔═╡ Cell order:
+# ╠═fada3494-c2c8-419a-a82e-4b0d07800e3f
 # ╠═ed4820bb-9d68-4b65-b895-8971a1ae68c4
 # ╠═147708bd-6ded-4316-aca0-1f6524ba3c53
 # ╠═5ad08e18-1ae9-4b05-a797-ef92940bfdeb
-# ╠═2b447c25-cc6e-4b40-a18a-fcab8eb64d8e
 # ╠═c9ea9876-b966-41b4-ac02-a6b1040e7119
 # ╠═2c26b000-36ee-473a-a7c5-d6a746096ec9
 # ╟─7c87ccc8-8b76-45f1-b10f-b04bba307ce9
-# ╟─5be273e4-faae-4f06-934c-a1da019e8b89
+# ╠═5be273e4-faae-4f06-934c-a1da019e8b89
 # ╠═1651ab99-e88a-40b7-9092-daf7f31e5604
 # ╠═fdd7dad1-facd-4ce3-9a72-20ce2c4cbe6a
-# ╟─86d02852-70e2-4fcc-bc8c-8d2b881fa248
+# ╠═86d02852-70e2-4fcc-bc8c-8d2b881fa248
 # ╠═f2af75cc-361e-4a45-a1b4-14a4ce404fa3
+# ╠═8abc7b8d-2c3c-42fa-b81c-e84f63b6c0c4
 # ╠═8d1b576f-e2a4-423d-80cc-0e69f6a376d4
 # ╠═9ce82e0e-bdcf-426c-b87e-32346c658b87
-# ╟─b339874c-e364-4f8c-bd62-5d66b175f0be
+# ╠═2a46e189-6f9f-4a11-ab1e-528a5fb9bb91
+# ╠═5d754ff0-9c44-4e36-a29f-dc4e96d9478b
+# ╠═c088a05d-ca70-400d-8906-f6a4c5e3ad3a
+# ╠═21d4c002-c870-48d8-9db4-2f4bb351730c
+# ╠═b339874c-e364-4f8c-bd62-5d66b175f0be
 # ╠═50661b7a-3484-4c52-b87c-4f44f119e164
-# ╟─4335575b-2ce8-41f0-a7ed-295789a5b723
+# ╠═4335575b-2ce8-41f0-a7ed-295789a5b723
 # ╠═c8959699-8886-423a-b994-3180c639de1b
-# ╟─7959fa22-560e-44d0-96ee-d2e7bf51cbf9
+# ╠═2e246223-2a63-4d63-888a-2ea892ffd192
+# ╠═7959fa22-560e-44d0-96ee-d2e7bf51cbf9
 # ╠═c27a8622-edca-4f19-91d0-1682ebc9cc7d
 # ╠═c799de28-efa8-4466-812f-ac3c79b5d835
-# ╟─7a9ad8dc-019d-4a32-b8b3-ee5a2703e609
+# ╠═20a899f1-3b0d-4fab-aef9-0c4abc6b95ea
+# ╠═7a9ad8dc-019d-4a32-b8b3-ee5a2703e609
+# ╠═8105a970-a0bf-4333-8bed-48a5912e3fae
 # ╠═5e3a0ec2-5066-4ab6-881d-af6113d23974
+# ╠═7b65c79d-c91f-4e7a-8b8b-570e612ca9e8
 # ╠═29167add-b592-4a1e-8742-88fa3264286d
 # ╠═cc4b5a4e-c2c6-4295-b4ff-8f73e84fcd88
+# ╟─d609970b-dbb2-443f-9c10-9ddaa5140d09
+# ╠═9c06b103-a77f-410f-918c-0e69ae139166
+# ╠═afc90e44-5ad7-47b6-baa0-a321936816a2
+# ╠═175c4bb5-2a80-4df9-b1f0-5a0a4eb83885
 # ╟─512a3b1f-2e79-4777-b976-6d310725e9f8
-# ╟─91de0472-61b8-47f4-babb-e07539fa3a55
+# ╠═91de0472-61b8-47f4-babb-e07539fa3a55
 # ╠═15d28187-c155-4332-bde4-90c2d40b7a36
-# ╟─dc4292b2-5aa8-4413-b4a3-91456f1d1d2a
+# ╠═dc4292b2-5aa8-4413-b4a3-91456f1d1d2a
 # ╠═3288b258-640b-414f-90d4-0bc1517aa506
 # ╠═45e9dc3c-bd28-4eaf-a56a-d12f4804f341
 # ╠═ab414dc7-7f31-4b0a-9d65-1268940fbc50
@@ -3229,57 +3519,65 @@ version = "1.4.1+1"
 # ╠═9f5a39bc-9e1c-4f08-ba50-0cf87122358b
 # ╠═73d535fd-227a-4c4b-a0ca-ed926ecf86c6
 # ╠═cb63530d-4041-4a53-92c7-73a5c5705564
-# ╟─3b4f512c-7fc3-4eda-90a3-57d7ed313f87
+# ╠═3b4f512c-7fc3-4eda-90a3-57d7ed313f87
 # ╠═719b6fe8-03e0-4e1d-8be8-6d642f78e86d
-# ╟─e3ea5e44-b189-4c2e-b7d0-5bdc26477ef8
-# ╟─8c89b94a-3250-4abf-8eda-35fd2b42f708
+# ╠═93adee56-344e-48f3-82ed-ada5907903e0
+# ╠═e3ea5e44-b189-4c2e-b7d0-5bdc26477ef8
+# ╠═8c89b94a-3250-4abf-8eda-35fd2b42f708
 # ╠═a6bcc9c6-4be7-4390-9fa3-6a124ed8afc1
-# ╟─cbf2db2b-5e72-4ad1-9fc3-0944c17db2df
+# ╠═dccb70d0-bfb9-4517-8aa1-b00f88e98810
+# ╠═823f4922-30f1-492a-97a9-28ecaaea210e
+# ╠═6ac3c2f1-0cec-4546-9af8-66d490f9d37b
+# ╠═fdaa391e-e5bc-4cd2-8d04-7cb22250c159
+# ╠═a5584d42-2318-4ea3-a423-b5465ac9cf26
+# ╠═cbf2db2b-5e72-4ad1-9fc3-0944c17db2df
 # ╠═c1943565-d495-480d-86ce-ea6f4e760b53
-# ╟─ee421d11-e00c-494c-a70b-f81c77745d21
+# ╠═ee421d11-e00c-494c-a70b-f81c77745d21
 # ╠═45fe0912-cbf9-4e82-bf7b-d60cb7aae79b
 # ╠═1dbce450-8de8-41a6-a4ef-fd59f3663664
 # ╠═cd0c7f24-ec98-432c-8444-397a9bf09d91
-# ╟─67b42f0b-f991-43a9-8f9f-3a69ba540994
+# ╠═67b42f0b-f991-43a9-8f9f-3a69ba540994
 # ╠═068fc2dc-213a-402f-a909-0b3bcdca4dd6
-# ╟─75aef58b-c087-4267-9c13-7bc1d90d1270
+# ╠═75aef58b-c087-4267-9c13-7bc1d90d1270
 # ╠═13ceb9f6-46ac-473d-abe0-9b543572e5f3
+# ╠═4136174a-e7c8-4d6e-a3c8-7ed5013228fb
 # ╠═69db6156-6e68-4f4c-8ede-18968858d455
-# ╟─4136174a-e7c8-4d6e-a3c8-7ed5013228fb
-# ╟─ba249ca4-a211-42e1-b66a-f2dd81c9b14f
+# ╠═107d08e3-2a51-42b9-a243-578a928571b9
+# ╠═ba249ca4-a211-42e1-b66a-f2dd81c9b14f
 # ╠═dba0e917-2bd6-4fa0-b6d4-1dad4968195a
-# ╟─d0181605-1105-4fb8-8470-db8cdf3d6853
+# ╠═d0181605-1105-4fb8-8470-db8cdf3d6853
 # ╠═3229c5f9-d341-4f5b-a24f-295e43437d5c
-# ╟─696d62d7-0c39-454e-a01d-a66a54748910
+# ╠═696d62d7-0c39-454e-a01d-a66a54748910
 # ╠═2403ce2f-7f96-4c68-9d31-80079e3daa36
-# ╟─2a6d6a27-68b9-4722-8d51-be470942f446
+# ╠═2a6d6a27-68b9-4722-8d51-be470942f446
 # ╠═23ab19cd-6fb4-4de1-b672-daa03a1228d4
-# ╟─476d4fbd-3cc5-4e78-91f8-e8022d38ffa0
+# ╠═476d4fbd-3cc5-4e78-91f8-e8022d38ffa0
 # ╠═d35f0ee3-e0b7-417f-8242-6e1a5d4114d6
+# ╠═7462eb3f-54ae-478b-818c-615007ef6a64
 # ╠═3edf24f0-be2f-461d-b121-1392618a9c67
 # ╠═ed58c640-6f2f-4a56-9803-8bc646a21d8f
 # ╠═45a8ddb4-bc79-4cfe-a3cb-07f57f441399
 # ╠═8449ecae-5fd0-4c30-ba7c-582157e8d9ff
 # ╠═b268b198-44af-44da-a895-e2c245117bb5
-# ╟─c2a2c394-474a-4916-8e7d-5b81da7cffbe
+# ╠═c2a2c394-474a-4916-8e7d-5b81da7cffbe
 # ╠═3c0cdbef-6976-4b8a-8602-12706070827d
-# ╟─173c19d7-f51b-4260-bf8e-922e66a02721
+# ╠═173c19d7-f51b-4260-bf8e-922e66a02721
 # ╠═bf96a44b-6441-4045-ae92-6613fbbbc3bb
-# ╟─c931b144-8b63-472a-8d4c-82be650f4593
-# ╟─49bdc70e-a2d4-4238-98ac-d29b37577d80
+# ╠═c931b144-8b63-472a-8d4c-82be650f4593
+# ╠═49bdc70e-a2d4-4238-98ac-d29b37577d80
 # ╠═b7ab3333-355f-42f9-b3f6-b859b3e6922d
-# ╟─188ce9c3-9199-4768-9ad2-ed9201e563f2
+# ╠═188ce9c3-9199-4768-9ad2-ed9201e563f2
 # ╠═52233289-914f-4ca6-a943-9489c0158f70
 # ╠═f13534c2-2dd8-40b2-b669-7a24b5c8bb91
-# ╟─eb1f70a1-42ec-4db0-b826-56bc5d4ce73b
+# ╠═eb1f70a1-42ec-4db0-b826-56bc5d4ce73b
 # ╠═69afe200-63be-4a25-8b51-3a5ad992642a
-# ╟─6f3b01f6-b8bf-4a0e-9cc2-87c93071c9a3
+# ╠═6f3b01f6-b8bf-4a0e-9cc2-87c93071c9a3
 # ╠═9535972c-0905-4c3a-b5b6-5656677f5d9c
-# ╟─7b1d63fc-bfbf-4d3e-a069-c07c7a558ee2
+# ╠═7b1d63fc-bfbf-4d3e-a069-c07c7a558ee2
 # ╠═859dee04-009b-4758-94ff-024a9f599509
-# ╟─05c99479-f4c1-4f5f-9d92-da6b487ed00c
+# ╠═05c99479-f4c1-4f5f-9d92-da6b487ed00c
 # ╠═a1a5b1fe-1b09-4dad-8ddd-c09bbb36699f
-# ╟─53a9552c-f8b8-4761-8258-0062cc2ac68c
+# ╠═53a9552c-f8b8-4761-8258-0062cc2ac68c
 # ╠═1ac5a9e2-7e61-4f40-a8e2-c597a44bf090
 # ╠═6f52d2f2-008e-4991-82aa-c211cae792cd
 # ╠═dffc67be-7ab2-49ba-a584-7877faed20d6
