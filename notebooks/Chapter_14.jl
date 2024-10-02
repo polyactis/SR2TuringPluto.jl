@@ -1081,7 +1081,7 @@ end
 
 # ╔═╡ 862a30ad-c28c-4145-9ac1-59c09ba08cab
 md" ## 14.49 Ordinary regression: Brain size ~ Mass + Group size
-- The σ_sq estimate (0.22) is higher than the book (0.05).
+- The σ_sq estimate (0.22) is higher than the book & PyMC3 (0.05).
 - Other estimates are similar."
 
 # ╔═╡ 9468f5d9-3eb0-4cd6-a40b-2401712991cc
@@ -1133,7 +1133,7 @@ first(cov_mat, 5)
 
 # ╔═╡ 7452a574-2021-45b4-b907-fdc39bffe9b3
 md"## 14.51 `m14_10`: Gaussian process using the Quadratic kernel (the covariance matrix).
-- All estimates are similar to the book.
+- All estimates are similar to the book or PyMC3.
 - Effect of group size is now insignificant!"
 
 # ╔═╡ af4eeae4-1d1b-460c-93b8-1e9ac23e9d60
@@ -1175,7 +1175,7 @@ spp_obs
 
 # ╔═╡ 6c699793-ed34-400f-b4de-31ccef89cb60
 md"## 14.52 OU process kernel (=Exponential distance kernel)
-- the \eta estimate (1.01) is similar in PyMC3 (1.08), but both are higher than the book(0.03)."
+- After truncating the range in sampling η² and ρ² to [0.01, 50] (was above 1 and 3 respectively), η² estimate (0.0135, was 1.01) is similar to the book (0.03). PyMC3 estimate of η² (1.08) is higher, not sure why."
 
 # ╔═╡ df368764-5237-4cbb-80c8-eac7c13844da
 begin
