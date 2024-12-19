@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.47
+# v0.20.0
 
 using Markdown
 using InteractiveUtils
@@ -20,13 +20,14 @@ begin
 	using Random
 	using Dagitty
 	using Distributions
-	#using StatisticalRethinking
-	using StatisticalRethinking: link
+	using StatisticalRethinking
+	#using StatisticalRethinking: link
 	using StatisticalRethinkingPlots
 	using StatsPlots
 	using StatsBase
 	using Logging
 	using LinearAlgebra
+	using LogExpFunctions # for logistic()
 end
 
 # ╔═╡ 31d2f9f8-86d7-11ef-3084-37735988fecc
@@ -40,7 +41,7 @@ html"""
 <style>
 	main {
 		margin: 0 auto;
-		max-width: max(1800px, 75%);
+		max-width: max(1600px, 75%);
     	padding-left: max(5px, 1%);
     	padding-right: max(350px, 10%);
 	}
@@ -188,8 +189,7 @@ md"## Figure 15.2"
 
 # ╔═╡ 9c83dbc7-2f25-4a61-9b23-0e379e534b19
 begin
-	
-	p1 = scatter(dlist2.A, dlist2.D_obs, mc=:blue, yerror=dlist2.D_sd, 
+	p15_1_1 = scatter(dlist2.A, dlist2.D_obs, mc=:blue, yerror=dlist2.D_sd, 
 	    label="observed", xlab="median age at marriage (std)", ylab="divorse rate (std)")
 	scatter!(dlist2.A, D_true, mc=:white, label="true")
 	
@@ -199,7 +199,7 @@ begin
 	x = -2.5:0.2:3
 	y = -0.0368595 .+  -0.540089 .* x
 	plot!(x,y, c=:orange, label="m15_2 estimate")
-	p1
+	p15_1_1
 end
 
 # ╔═╡ b637e01a-5cd0-4e3a-8396-fdae6227486d
@@ -210,7 +210,7 @@ md"## Code 15.6 Figure 15.3"
 
 # ╔═╡ 3b45e480-608e-4fcb-a353-3362a082091e
 begin
-	p2 = scatter(dlist2.M_obs, dlist2.D_obs, mc=:blue, yerror=dlist2.D_sd, 
+	p15_1_2 = scatter(dlist2.M_obs, dlist2.D_obs, mc=:blue, yerror=dlist2.D_sd, 
 	    label="observed", xlab="marriage rate (std)", ylab="divorse rate (std)",
 		legend=true)
 	scatter!(M_true, D_true, mc=:white, label="true", legend=true)
@@ -221,7 +221,7 @@ begin
 	x2 = -2:0.2:3
 	y2 = -0.0368595 .+  0.1915 .* x2
 	plot!(x2,y2, c=:orange, label="m15_2 estimate")
-	p2
+	p15_1_2
 end
 
 # ╔═╡ b5d9bc05-360a-407b-b727-13d73ba68787
@@ -251,20 +251,784 @@ let
 	A_obs = rand.(Normal.(A));
 end
 
+# ╔═╡ d3a88f86-3396-4dc0-815c-c5c9eafc5796
+
+
 # ╔═╡ 2e140860-f9f8-4b83-b89a-9bdeed82ece2
 md"# 15.2 Missing data"
 
 # ╔═╡ a1648f63-afe2-40aa-9521-19fc9cfc61b1
+md"## `m15_3`
 
+- UndefVarError: `logistic` not defined in Main.var
+- Suggestion: check for spelling errors or missing imports.
+- Hint: a global variable of this name may be made accessible by importing LogExpFunctions in the current active module Main
+- Hint: a global variable of this name may be made accessible by importing StatsFuns in the current active module Main
+"
+
+# ╔═╡ ca77e5a2-bc37-4059-b3c6-8afb1d4c16ac
+begin
+	@model function m15_3(H, S)
+	    a ~ Normal()
+	    bS ~ Normal(0, 0.5)
+	    p = @. LogExpFunctions.logistic(a + bS*S)
+	    @. H ~ Binomial(10, p)
+	end
+end
 
 # ╔═╡ 47b03821-3929-4bc5-9565-10894d148d53
-md"## Code 15.8"
+md"## Code 15.8 Vanilla simulation: a=0, b=1"
 
 # ╔═╡ 0239e606-6a62-4e25-ae94-0a104a7adbd5
+begin
+	N0 = 100
+	S0 = rand(Normal(), N0)
+	a0 = 0
+	bS0 = 1
+	H0 = rand.([BinomialLogit(10, a0+bS0*l) for l in S0]);
+end
+
+# ╔═╡ 38ee7cfe-6418-4c5c-84f8-555fc53accaa
+size(H0)
+
+# ╔═╡ 665148ed-68bf-41e2-bede-016b529e882e
+begin
+	Random.seed!(1)
+	@time m15_3_ch0 = sample(m15_3(H0, S0), NUTS(100, 0.65, init_ϵ=0.25), 1000)
+	m15_3_df0 = DataFrame(m15_3_ch0)
+	describe(m15_3_df0)
+end
+
+# ╔═╡ 1ff3ea40-e8de-439f-84a0-41911b4086fd
+md"
+- Estimates of a and b are close to the truth."
+
+# ╔═╡ ce077e2d-56b2-4ea3-a423-50835ad3ab39
+md"## Code 15.9 Simulate a: H* randomly missing (H randomly eaten by the dog)"
+
+# ╔═╡ ddaa556f-39fa-4098-943c-c7fab173450d
+begin
+	Da = rand(Bernoulli(), N0)
+	Hma = Vector{Union{Missing,Int}}(H0)
+	Hma[Da .== 1] .= missing;
+end
+
+# ╔═╡ d29567c8-d6f4-49b6-9bb6-5fb0beb630fc
+Hma
+
+# ╔═╡ 1381ea8f-b34d-4b89-bdba-f9a4aa6c263e
+params(Bernoulli())
+
+# ╔═╡ 6a05972d-3d38-440c-bd0f-0045b3b8b282
+.!ismissing.(Hma)
+
+# ╔═╡ ac433e9d-6c49-4e18-bbc7-dc7a5eed021d
+md"### 15.9.1 Complete data fitting `m15_3`"
+
+# ╔═╡ 35c21da2-3999-457b-b551-a311dcd3b747
+begin
+	Random.seed!(1)
+	index_vec = .!ismissing.(Hma)
+	@time m15_3_ch_a = sample(m15_3(Hma[index_vec], S0[index_vec]), NUTS(100, 0.65, init_ϵ=0.25), 1000)
+	m15_3_df_a = DataFrame(m15_3_ch_a)
+	describe(m15_3_df_a)
+end
+
+# ╔═╡ ebb0877c-9253-4ed7-880b-0a293bf548d2
+md"## Code 15.10 Simulate b: Dog only eats Homework of students who study hard (spend less time playing with the dog)"
+
+# ╔═╡ cd319704-6ca8-489e-9b8e-0d37896798af
+
+
+# ╔═╡ a99f2a91-3eac-42b5-95ef-50d80c1c3d01
+begin
+	Db = S0 .> 0
+	Hmb = Vector{Union{Missing,Int}}(H0)
+	Hmb[Db .== 1] .= missing;
+end
+
+# ╔═╡ 52d3e60a-b528-411b-b9ab-48d4fc421390
+md"### 15.10.1 Complete data fitting `m15_3`
+- Results are reasonably OK."
+
+# ╔═╡ 31687fbe-e3d7-443f-9d93-4fb57a542b21
+begin
+	Random.seed!(1)
+	index_vecb = .!ismissing.(Hmb)
+	@time m15_3_ch_b = sample(m15_3(Hmb[index_vecb], S0[index_vecb]), NUTS(100, 0.65, init_ϵ=0.25), 1000)
+	m15_3_df_b = DataFrame(m15_3_ch_b)
+	describe(m15_3_df_b)
+end
+
+# ╔═╡ cedb7c28-48a6-402a-a47b-cca6a225fc65
+md"## Code 15.11 Simulate c: X (noisy house) impacts Homework quality and Dog homework-eating behavior"
+
+# ╔═╡ 404b4c67-d35b-4506-b0d9-d51ad7211c96
+begin
+	Random.seed!(501)
+	N2 = 1000
+	X = rand(Normal(), N2)
+	Sc = rand(Normal(), N2)
+	Hc = rand.([BinomialLogit(10, l) for l in 2 .+ Sc .- 2X])
+	Dc = X .> 1
+	Hmc = Vector{Union{Missing,Int}}(Hc)
+	Hmc[Dc .== 1] .= missing;
+end
+
+# ╔═╡ 0a6ee610-5fe1-4027-8eda-cb962678d115
+md"### Code 15.12 Use true H to fit `m15_3`
+- Estimates are off."
+
+# ╔═╡ 4761e866-cafb-4b79-bb6c-cb459d1a8e33
+begin
+	Random.seed!(1)
+	@time m15_3_ch_c_use_H = sample(m15_3(Hc, Sc), NUTS(100, 0.65, init_ϵ=0.25), 1000)
+	m15_3_df_c_use_H = DataFrame(m15_3_ch_c_use_H)
+	describe(m15_3_df_c_use_H)
+end
+
+# ╔═╡ c3b2a87a-2e8d-4fd0-b5cb-95a53e351b39
+md"### 15.12.1 Use Hm but complete-data fitting `m15_3`
+- Estimates are off too. Esp. estimate a.
+- But estimate b improves a bit."
+
+# ╔═╡ b1782452-5a0a-4e82-be7c-ef489f42bcee
+begin
+	Random.seed!(1)
+	index_vecc = .!ismissing.(Hmc)
+	@time m15_3_ch_c = sample(m15_3(Hmc[index_vecc], Sc[index_vecc]), NUTS(100, 0.65, init_ϵ=0.25), 1000)
+	m15_3_df_c = DataFrame(m15_3_ch_c)
+	describe(m15_3_df_c)
+end
+
+# ╔═╡ e7407bf8-829b-491a-8706-26806f4678c4
+
+
+# ╔═╡ 1eb53c4c-9fb4-4f45-b8c5-36ab784a620d
+md"### Code 15.13. Use H and complete-data fitting `m15_3`
+
+- Estimates almost identical to the ones above"
+
+# ╔═╡ 22d1dd18-67e4-4944-99f5-9b54036c1c1f
+begin
+	Random.seed!(1)
+	@time m15_4_ch_c_use_H_complete = sample(m15_3(Hc[Dc .== 0], Sc[Dc .== 0]), NUTS(100, 0.65, init_ϵ=0.25), 1000)
+	m15_4_df_c_use_H_complete = DataFrame(m15_4_ch_c_use_H_complete)
+	describe(m15_4_df_c_use_H_complete)
+end
+
+# ╔═╡ ef25ed7f-0f72-4134-94cf-032beff8616f
+md"### Code 15.14 Change simulation c: reverse the missingness
+"
+
+# ╔═╡ 8fca00a8-941e-47bd-9a95-7959c75e3696
+begin
+	Dc2 = abs.(X) .< 1;
+	Hmc2 = Vector{Union{Missing,Int}}(Hc)
+	Hmc2[Dc2 .== 1] .= missing;
+end
+
+# ╔═╡ 2999a82d-58de-49c6-8ec0-1560298a99a8
+md"### 15.14.1 Use Hmc2 but complete-data fitting `m15_3`
+- Removing missing data reduces the estimate of b."
+
+# ╔═╡ 1e19b0c0-7f12-4d9f-a84d-36e90902c781
+begin
+	Random.seed!(1)
+	index_vec_c2 = .!ismissing.(Hmc2)
+	@time m15_3_ch_c_reverse_missing = sample(m15_3(Hmc2[index_vec_c2], Sc[index_vec_c2]),
+		NUTS(100, 0.65, init_ϵ=0.25), 1000)
+	m15_3_df_c_reverse_missing = DataFrame(m15_3_ch_c_reverse_missing)
+	describe(m15_3_df_c_reverse_missing)
+end
+
+# ╔═╡ 67b9c764-90f8-48b6-adc1-9e0c23a64f71
+md"## Code 15.15 Simulate d: Homework affects dog. Bad homework more likely gets eaten."
+
+# ╔═╡ 47722ff5-e59b-4025-9a76-2678e4fb323c
+begin
+	Sd = rand(Normal(), N0)
+	Hd = rand.([BinomialLogit(10, l) for l in Sd])
+	Dd = Hd .< 5
+	Hmd = Vector{Union{Missing,Int}}(Hd)
+	Hmd[Dd .== 1] .= missing;
+end
+
+# ╔═╡ e95c8601-068b-494a-8aa1-c110b06a3754
+md"### 15.15.1 Complete-data fitting `m15_3`"
+
+# ╔═╡ 7187c38a-2e6e-4bd0-94e4-7a20db878f5e
+begin
+	Random.seed!(1)
+	index_vec_d = .!ismissing.(Hmd)
+	@time m15_3_ch_d = sample(m15_3(Hmd[index_vec_d], Sd[index_vec_d]),
+		NUTS(100, 0.65, init_ϵ=0.25), 1000)
+	m15_3_df_d = DataFrame(m15_3_ch_d)
+	describe(m15_3_df_d)
+end
+
+# ╔═╡ bac7a0c8-7b00-4815-8c3a-05a65ef22ac5
+md"## Code 15.16 Milk calories ~ Mass + Brain size.  Load data and standardize"
+
+# ╔═╡ e6379931-77ad-4e95-9890-d1f23e475854
+begin
+	d_milk = DataFrame(CSV.File("data/milk.csv",  missingstring="NA"))
+
+	# get rid of dots in column names
+	rename!(n -> replace(n, "." => "_"), d_milk)
+
+	d_milk.neocortex_prop = d_milk.neocortex_perc ./ 100
+	d_milk.logmass = log.(d_milk.mass)
+
+	t = Vector{Union{Missing, Float64}}(missing, nrow(d_milk))
+	present_mask = completecases(d_milk, :neocortex_prop)
+	t[present_mask] .= standardize(ZScoreTransform, 
+		Vector{Float64}(d_milk.neocortex_prop[present_mask]))
+
+	dat_list = (
+    	K = standardize(ZScoreTransform, d_milk.kcal_per_g),
+    	B = t,
+    	M = standardize(ZScoreTransform, d_milk.logmass),
+	);
+end
+
+
+# ╔═╡ 5a378c18-ff01-47ec-9766-d6342e993044
+d_milk
+
+# ╔═╡ 12f5055c-c0b2-4849-85c1-969d6353919c
+sum(present_mask)
+
+# ╔═╡ c2d1cc0d-2cf5-421c-8239-51a623b6cc01
+t
+
+# ╔═╡ d6038ce7-076a-4309-ac7d-8f5513f1a9b1
+md"### Code 15.17 `m15_5` Model imputation and fitting"
+
+# ╔═╡ f78c060a-8dc8-44ae-8071-eb69b57ee488
+begin
+	@model function m15_5(K, B, M)
+	    σ ~ Exponential()
+	    σ_B ~ Exponential()
+	    a ~ Normal(0, 0.5)
+	    ν ~ Normal(0, 0.5)
+	    bB ~ Normal(0, 0.5)
+	    bM ~ Normal(0, 0.5)
+	    
+	    N_missing = sum(ismissing.(B))
+	    B_impute ~ filldist(Normal(ν, σ_B), N_missing)
+	
+	    i_missing = 1
+	    for i in eachindex(B)
+	        if ismissing(B[i])
+	            #B_impute[i_missing] ~ Normal(ν, σ_B) # this line is bug!
+	            b = B_impute[i_missing]
+	            i_missing += 1
+	        else
+	            B[i] ~ Normal(ν, σ_B)
+	            b = B[i]
+	        end
+	        μ = a + bB * b + bM * M[i]
+	        K[i] ~ Normal(μ, σ)
+	    end
+	end
+	
+	Random.seed!(1)
+	@time m15_5_ch = sample(m15_5(dat_list...), NUTS(), 1000);
+	m15_5_df = DataFrame(m15_5_ch);
+end
+
+# ╔═╡ 8232b9fc-c122-45e7-8643-0c4956f1135e
+describe(m15_5_df)
+
+# ╔═╡ 38068bfc-c292-4428-b414-47bd29ffa1c1
+md"### Code 15.19 `m15_6` Model fitting using only the non-missing values"
+
+# ╔═╡ a867c06c-0e13-4dc5-b29e-b2f9214c5596
+begin
+	dat_list_obs = (
+    K = dat_list.K[present_mask],
+    B = Vector{Float64}(dat_list.B[present_mask]),
+    M = dat_list.M[present_mask]
+)
+
+@model function m15_6(K, B, M)
+    σ ~ Exponential()
+    σ_B ~ Exponential()
+    a ~ Normal(0, 0.5)
+    ν ~ Normal(0, 0.5)
+    bB ~ Normal(0, 0.5)
+    bM ~ Normal(0, 0.5)
+    
+    @. B ~ Normal(ν, σ_B)
+    μ = @. a + bB * B + bM * M
+    @. K ~ Normal(μ, σ)
+end
+
+Random.seed!(1)
+@time m15_6_ch = sample(m15_6(dat_list_obs...), NUTS(), 1000)
+m15_6_df = DataFrame(m15_6_ch);
+end
+
+# ╔═╡ 6f148b0d-e2a8-4778-ac55-8ed21c94204d
+describe(m15_6_df)
+
+# ╔═╡ b534f48d-6d86-4920-815d-faf333861348
+md"### Code 15.20 Compare parameter estimates and CI between `m15_5` and `m15_6`"
+
+# ╔═╡ 3afe3d4f-83f3-4986-aa4d-616ed699a05f
+coeftab_plot(m15_5_df, m15_6_df; pars=(:bB, :bM), names=("m15.5", "m15.6"))
+
+# ╔═╡ afd5610d-036d-4d69-8f39-ed92f36e9fe7
+
+
+# ╔═╡ 119e54b0-e058-4d1d-afc3-70ab1c95f5da
+md"### Code 15.21 Fig 15.5 Plot the imputed values and its confidence"
+
+# ╔═╡ 414b1d7b-2584-45c0-858f-158f3b661507
 let
-	N = 100
-	S = rand(Normal(), N)
-	H = rand.([BinomialLogit(10, l) for l in S]);
+	N_missing = sum(ismissing.(dat_list.B))
+	miss_mask = ismissing.(dat_list.B)
+	
+	B_impute_μ = [
+	    mean(m15_5_df[!,"B_impute[$i]"])
+	    for i ∈ 1:N_missing
+	]
+	
+	B_impute_pi = [
+	    PI(m15_5_df[!,"B_impute[$i]"])
+	    for i ∈ 1:N_missing
+	]
+	
+	err = (
+	    B_impute_μ .- first.(B_impute_pi), 
+	    last.(B_impute_pi) .- B_impute_μ
+	)
+	
+	p1 = scatter(dat_list.B, dat_list.K, xlab="neocortex percent (std)", ylab="kcal milk (std)")
+	Ki = dat_list.K[miss_mask]
+	scatter!(B_impute_μ, Ki, xerr=err, mc=:red, label="missing B")
+	#scatter!(B_impute_μ, Ki, xerr=err, ms=0)
+	
+	p2 = scatter(dat_list.M, dat_list.B, ylab="neocortex percent (std)", xlab="log body mass (std)")
+	Mi = dat_list.M[miss_mask]
+	scatter!(Mi, B_impute_μ, yerr=err, mc=:red, label="missing B")
+	#scatter!(Mi, B_impute_μ, yerr=err, ms=0)
+	
+	plot(p1, p2, size=(1400, 400), margin=5*Plots.mm)
+end
+
+# ╔═╡ 6024c810-f7b3-40d3-bd4a-cd5ba762ac91
+md"### Code 15.22 `m15_7_1`: add a bivariate normal between two predictors."
+
+# ╔═╡ 255ace20-b8b5-4799-9be4-327c7e3963c2
+@model function m15_7_1(K, MB, M_missingB)
+    σ ~ Exponential()
+    σ_BM ~ Exponential()
+    a ~ Normal(0, 0.5)
+    μB ~ Normal(0, 0.5)
+    μM ~ Normal(0, 0.5)
+    bB ~ Normal(0, 0.5)
+    bM ~ Normal(0, 0.5)
+    Rho_BM ~ LKJ(2, 2)
+    
+    Σ = (σ_BM .* σ_BM') .* Rho_BM
+    
+    # process complete cases
+    for i ∈ eachindex(MB)
+        MB[i] ~ MvNormal([μM, μB], Σ)
+    end
+    
+    # impute and process incomplete cases
+    N_missing = length(M_missingB)
+	#B_impute = Array{Float64}(undef, N_missing)  # Note =, not ~. Note Float64, not Real. Vector{..} also works.
+	B_impute ~ filldist(Normal(0, 3), N_missing)	# this would cause all estimates to be from the prior.
+	#B_impute ~ filldist(Normal(μB, σ_BM), N_missing)	# this would fail to sample.
+    MB_missingB = [
+        [m, b]
+        for (m, b) ∈ zip(M_missingB, B_impute)
+    ]
+
+    for i ∈ eachindex(MB_missingB)
+        MB_missingB[i] ~ MvNormal([μM, μB], Σ)
+    end
+
+    # from both sets, build mean vector for K
+    μ = [
+        a + bB * b + bM * m
+        for (m, b) ∈ Iterators.flatten((MB, MB_missingB))
+    ]
+    
+    @. K ~ Normal(μ, σ)
+end
+
+# ╔═╡ c8a1a3c0-4ef3-4a2a-be2b-6cdf71b57592
+begin
+	# prepare data for sampling
+	
+	# to improve stability and performance, need to separate full samples and samples need to be imputed
+	pres_mask =  @. !ismissing(dat_list.B)
+	_miss_mask = ismissing.(dat_list.B)
+	MB = [
+	    [m, b]
+	    for (m, b) ∈ zip(dat_list.M[pres_mask], Vector{Float64}(dat_list.B[pres_mask]))
+	]
+	M_missingB = dat_list.M[_miss_mask]
+	
+	# very important to reorder K values to match order of samples
+	KK = vcat(dat_list.K[pres_mask], dat_list.K[_miss_mask])
+end
+
+# ╔═╡ f60b9f82-81c4-40ff-8e3a-54b3bd37b0a9
+M_missingB
+
+# ╔═╡ c73613f1-5d06-4eb9-a476-6b353b97e8a6
+begin
+	Random.seed!(1)
+	@time m15_7_1_ch = sample(m15_7_1(KK, MB, M_missingB), NUTS(), 1000)
+	m15_7_1_df = DataFrame(m15_7_1_ch);
+end
+
+# ╔═╡ dba51dc4-8fba-4ba2-b113-b78a7a77df52
+describe(m15_7_1_df)
+
+# ╔═╡ 71eb6a86-faa8-4b5b-9a92-25b83e22d18d
+md"### Plot `m15_7_1` estimates
+- Sampling not working very well. Estimates of missing B hovers around 0."
+
+# ╔═╡ aa785f0d-9d45-4e46-b5f8-f87e058afaa3
+let
+	N_missing = sum(ismissing.(dat_list.B))
+	miss_mask = ismissing.(dat_list.B)
+	
+	B_impute_μ = [
+	    #mean(m15_7_2_df[!,"MB_missingB[$i][2]"])
+	    mean(m15_7_1_df[!,"B_impute[$i]"])
+	    for i ∈ 1:N_missing
+	]
+	
+	B_impute_pi = [
+	    #PI(m15_7_2_df[!,"MB_missingB[$i][2]"])
+	    PI(m15_7_1_df[!,"B_impute[$i]"])
+	    for i ∈ 1:N_missing
+	]
+	
+	err = (
+	    B_impute_μ .- first.(B_impute_pi), 
+	    last.(B_impute_pi) .- B_impute_μ
+	)
+	
+	p1 = scatter(dat_list.B, dat_list.K, xlab="neocortex percent (std)", ylab="kcal milk (std)")
+	Ki = dat_list.K[miss_mask]
+	scatter!(B_impute_μ, Ki, mc=:red, label="missing", xerr=err)
+
+	
+	#scatter!(B_impute_μ, Ki, xerr=err, ms=0)
+	
+	p2 = scatter(dat_list.M, dat_list.B, ylab="neocortex percent (std)", xlab="log body mass (std)")
+	Mi = dat_list.M[miss_mask]
+	scatter!(Mi, B_impute_μ, mc=:red, label="missing", yerr=err)
+	#scatter!(Mi, B_impute_μ, yerr=err, ms=0)
+	
+	plot(p1, p2, size=(800, 400))
+end
+
+# ╔═╡ 041b92e4-fb00-409d-a7cc-31da7307412b
+md"### model `m15_7_2`: B_impute is undef Float64.
+- Still buggy. The observed M is regarded as missing as well in this model.
+- A better option might be employing two conditional distributions. M|B, and B|M."
+
+# ╔═╡ f292f868-7179-4439-889d-8a1c18a23ec7
+@model function m15_7_2(K, MB, M_missingB)
+    σ ~ Exponential()
+    σ_BM ~ Exponential()
+    a ~ Normal(0, 0.5)
+    μB ~ Normal(0, 0.5)
+    μM ~ Normal(0, 0.5)
+    bB ~ Normal(0, 0.5)
+    bM ~ Normal(0, 0.5)
+    Rho_BM ~ LKJ(2, 2)
+    
+    Σ = (σ_BM .* σ_BM') .* Rho_BM
+    
+    # process complete cases
+    for i ∈ eachindex(MB)
+        MB[i] ~ MvNormal([μM, μB], Σ)
+    end
+    
+    # impute and process incomplete cases
+    N_missing = length(M_missingB)
+	B_impute = Array{Float64}(undef, N_missing)  # Note =, not ~. Note Float64, not Real. Vector{..} also works.
+	#B_impute ~ filldist(Normal(), N_missing)	# this would cause all estimates to be from the prior.
+	#B_impute ~ filldist(Normal(μB, σ_BM), N_missing)	# this would fail to sample.
+    MB_missingB = [
+        [m, b]
+        for (m, b) ∈ zip(M_missingB, B_impute)
+    ]
+
+    for i ∈ eachindex(MB_missingB)
+        MB_missingB[i] ~ MvNormal([μM, μB], Σ)
+		MB_missingB[i][1] = M_missingB[i] # this would pull the estimated B values closer to the main trend, but not as much as the book.
+        
+		#MB_missingB[i] ~ MvNormal([M_missingB[i], μB], Σ) # this didn't improve.
+		
+		#MB_missingB[i][1] ~ Normal(μM, σ_BM) # this is wrong. same random variable defined twice.
+		
+    end
+
+    # from both sets, build mean vector for K
+    μ = [
+        a + bB * b + bM * m
+        for (m, b) ∈ Iterators.flatten((MB, MB_missingB))
+    ]
+    
+    @. K ~ Normal(μ, σ)
+end
+
+# ╔═╡ db010936-1efb-41ab-8dc0-3021d05a1cf9
+begin
+	Random.seed!(1)
+	
+	@time m15_7_2_ch = sample(m15_7_2(KK, MB, M_missingB), NUTS(), 1000)
+	m15_7_2_df = DataFrame(m15_7_2_ch);
+end
+
+# ╔═╡ b1007d6b-588d-4f5b-ad55-cb41bb7488fd
+describe(m15_7_2_df)
+
+# ╔═╡ 4e2149ab-315a-4267-a06d-0ad756ca7e29
+md"### Plot `m15_7_2` estimates
+- The Julia model didn't use the observed values for the M variable and instead sampled M as well.
+- That results in imputation not working very well. Both estimated M and estimated B hover around 0."
+
+# ╔═╡ b0b3c21d-dc55-4ad1-9023-94c79e888dcf
+let
+	N_missing = sum(ismissing.(dat_list.B))
+	miss_mask = ismissing.(dat_list.B)
+	
+	B_impute_μ = [
+	    mean(m15_7_2_df[!,"MB_missingB[$i][2]"])
+	    #mean(m15_7_df[!,"B_impute[$i]"])
+	    for i ∈ 1:N_missing
+	]
+	
+	B_impute_pi = [
+	    PI(m15_7_2_df[!,"MB_missingB[$i][2]"])
+	    #PI(m15_7_df[!,"B_impute[$i]"])
+	    for i ∈ 1:N_missing
+	]
+	
+	err = (
+	    B_impute_μ .- first.(B_impute_pi), 
+	    last.(B_impute_pi) .- B_impute_μ
+	)
+	
+	p1 = scatter(dat_list.B, dat_list.K, xlab="neocortex percent (std)", ylab="kcal milk (std)")
+	Ki = dat_list.K[miss_mask]
+	scatter!(B_impute_μ, Ki, xerr=err, mc=:red, label="missing")
+
+	
+	#scatter!(B_impute_μ, Ki, xerr=err, ms=0)
+	
+	p2 = scatter(dat_list.M, dat_list.B, ylab="neocortex percent (std)", xlab="log body mass (std)")
+	Mi = dat_list.M[miss_mask]
+	scatter!(Mi, B_impute_μ, yerr=err, mc=:red, label="missing")
+	#scatter!(Mi, B_impute_μ, yerr=err, ms=0)
+	
+	plot(p1, p2, size=(800, 400))
+end
+
+# ╔═╡ 113be257-af08-44d1-896d-b77fb2891196
+let
+	N_missing = sum(ismissing.(dat_list.B))
+	miss_mask = ismissing.(dat_list.B)
+
+	M_impute_μ = [
+	    mean(m15_7_2_df[!,"MB_missingB[$i][1]"])
+	    for i ∈ 1:N_missing
+	]
+	
+	M_impute_pi = [
+	    PI(m15_7_2_df[!,"MB_missingB[$i][1]"])
+	    for i ∈ 1:N_missing
+	]
+	
+
+	err = (
+	    M_impute_μ .- first.(M_impute_pi), 
+	    last.(M_impute_pi) .- M_impute_μ
+	)
+	
+	Mi = dat_list.M[miss_mask]
+	p2 = scatter(Mi, M_impute_μ, yerr=err, ylab="est log body mass (std)", xlab="log body mass (std)")
+	#scatter!(Mi, M_impute_μ, yerr=err, ms=0)
+	
+	p2
+end
+
+# ╔═╡ 7b8b955e-6afc-4f8d-9446-df5e804df552
+md"### ToDo: split the bivariate normal into two univariate conditional normal"
+
+# ╔═╡ 9aa30d8f-628d-49fa-9fa1-72adae90176f
+
+
+# ╔═╡ 57874713-3484-4f3f-b2c1-74beacd8af50
+
+
+# ╔═╡ 62cda784-e2fd-438c-b404-e8044e8f731d
+md"## Code 15.23 Obtain index of data with missing B (Brain/Neocortex size)"
+
+# ╔═╡ 7a929cb5-d7ec-4739-b654-44ef7065dd80
+ismissing.(dat_list.B)
+
+# ╔═╡ 98be8b25-9957-40b3-977a-d8dec17e5e2a
+md"## Code 15.24 Load the Gods dataset"
+
+# ╔═╡ bd0db387-504b-41b9-a699-fc7dfbbe98f3
+begin
+	d_gods = DataFrame(CSV.File("data/Moralizing_gods.csv", missingstring="NA"))
+	describe(d_gods)
+end
+
+# ╔═╡ 4e403357-10e8-426b-9e8a-773de1bcb676
+first(d_gods, 4)
+
+# ╔═╡ d35389e6-c1d3-4bb7-944f-9b3bd4069048
+md"## Code 15.25 Count rows with different moralizing_gods"
+
+# ╔═╡ f9f7bed4-7b41-4b61-82e6-1befc272af1c
+countmap(d_gods.moralizing_gods)
+
+# ╔═╡ 2657634f-9f63-4724-91b5-b69ce9cd21dd
+md"## Code 15.26 Fig 15.7 Plot pop vs time"
+
+# ╔═╡ 6b40262b-85f1-46b8-ad0f-ef42c9424d2e
+let
+	symbol = map(g -> ismissing(g) ? :x : (g == 1 ? :circle : :+), d_gods.moralizing_gods)
+	color = map(g -> ismissing(g) ? :black : :blue, d_gods.moralizing_gods)
+	scatter(d_gods.year, d_gods.population, m=symbol, mc=color, 
+		xlab="Time (year)", ylab="Population size", title="Black X is gods unknown. Solid blue circle is moralizing god. Blue + is no moralizing god.", legend=false,
+		size=(1400,600), margin=5*Plots.mm)
+end
+
+# ╔═╡ b8ebce52-89cf-4230-b895-ce64e66526da
+md"## Code 15.27
+- Check how god missingness is associated with writing/literacy."
+
+# ╔═╡ 7e483219-dbef-4a7c-a167-22a78eb77a85
+countmap(zip(d_gods.moralizing_gods, d_gods.writing))
+
+# ╔═╡ d11fa148-ebf1-424c-b626-a958f23fceaf
+md"## Code 15.28 Check how moralizing_gods varies over years for Hawaii"
+
+# ╔═╡ 837ff71b-2f77-4e7c-ae0a-1bf7c45b2a2b
+d_gods[d_gods.polity .== "Big Island Hawaii", ["year", "writing", "moralizing_gods"]]
+
+# ╔═╡ beb71bee-c8d4-47fe-baff-9cb8894c060b
+md"# 15.3 Categorical errors and discrete absences"
+
+# ╔═╡ 880d2f17-9c60-4ce5-894c-a8dda4032cd4
+md"## Code 15.29 Simulate data
+- parameter `r` (the rate of missing) has a large impact on accuracy of the β estimate (less so on the α estimate). The higher it is, the less accurate the β estimate is.
+
+"
+
+# ╔═╡ c2c8c208-f540-4dee-aa59-b1cf8a9e8b26
+"""
+- cat_probability/k: probability that there is a cat in a house.
+- missing_rate/r: The probability if the presence of cat in a house is unknown. The higher the missing_rate is, the less accurate the β estimate is.
+	
+"""
+function simulate_missing_cat_data(N_houses::Int; α=5, β=-2, cat_probability=0.5, missing_rate=0.2)
+	Random.seed!(9)
+	
+
+	cat = rand(Bernoulli(cat_probability), N_houses)
+	# music_notes is the number of notes that the songbird in the house will sing.
+	music_notes = rand.([Poisson(exp(α + β * c)) for c ∈ cat])	# wrongly omitted exp() before.
+	
+	R_C = rand(Bernoulli(missing_rate), N_houses)
+	
+	cat_obs = Vector{Int}(cat)
+	cat_obs[R_C] .= -9 # -9 means unknown/missing .
+	
+	dat = (
+	    notes = music_notes,
+	    cat = cat_obs,
+	    RC = R_C,
+	    N = N_houses,
+	)
+end
+
+# ╔═╡ a85d463b-2ff7-4ff9-9174-c8a3494e1202
+md"## Code 15.30 `m15_8`"
+
+# ╔═╡ e53f3193-cef0-4b62-84ba-49639e726edd
+@model function m15_8(notes, cat, RC, N)
+    α ~ Normal(0, 2)
+    β ~ Normal(0, 2) #Uniform(-10, 10) does not help.
+    k ~ Beta(2, 2)
+    λ = @. exp(α + β * cat)	# was logistic() in the original code.
+    
+    for i ∈ eachindex(cat)
+        if !RC[i]  # Cat is not missing. RC[i]==0.
+            cat[i] ~ Bernoulli(k)
+            notes[i] ~ Poisson(λ[i])
+			#Turing.@addlogprob! poislogpdf(λ[i], notes[i])	#equivalent to above ~. 
+        else
+            Turing.@addlogprob! log(k) + poislogpdf(exp(α+β), notes[i])
+            Turing.@addlogprob! log(1-k) + poislogpdf(exp(α), notes[i])
+        end
+    end
+end
+
+# ╔═╡ 1472501b-a710-40c6-98b4-d0dd723b2d65
+begin
+	dat1 = simulate_missing_cat_data(1000, cat_probability=0.5, missing_rate=0.2)
+	@time m15_8_df1 = DataFrame(sample(m15_8(dat1...), NUTS(), 2000))
+	describe(m15_8_df1)
+end
+
+# ╔═╡ 6859df38-2028-43e6-b6b3-e0bfa82a1552
+begin
+	dat2 = simulate_missing_cat_data(1000, cat_probability=0.5, missing_rate=0.01)
+	@time m15_8_df2 = DataFrame(sample(m15_8(dat2...), NUTS(), 2000))
+	describe(m15_8_df2)
+end
+
+# ╔═╡ 28a27cea-b3b7-408e-a75d-f98b865037db
+let
+	dat3 = simulate_missing_cat_data(1000, cat_probability=0.5, missing_rate=0.001)
+	@time m15_8_df3 = DataFrame(sample(m15_8(dat3...), NUTS(), 2000))
+	describe(m15_8_df3)
+end
+
+# ╔═╡ e252766c-dd69-461a-b35f-79d11a3f01e6
+let
+	dat_tmp = simulate_missing_cat_data(1000, cat_probability=0.5, missing_rate=0.95)
+	@time m15_8_df_tmp = DataFrame(sample(m15_8(dat_tmp...), NUTS(), 2000))
+	describe(m15_8_df_tmp)
+end
+
+# ╔═╡ b70e1bd4-8d6b-4fbd-ae14-a879e2a23014
+let
+	dat_tmp = simulate_missing_cat_data(1000, α=5, cat_probability=0.8, missing_rate=0.95)
+	@time m15_8_df_tmp = DataFrame(sample(m15_8(dat_tmp...), NUTS(), 2000))
+	describe(m15_8_df_tmp)
+end
+
+# ╔═╡ fd920bea-b7b7-47f9-b3b0-b6e04a2fe9d3
+let
+	dat_tmp = simulate_missing_cat_data(1000, α=5, cat_probability=0.8, missing_rate=0.05)
+	@time m15_8_df_tmp = DataFrame(sample(m15_8(dat_tmp...), NUTS(), 2000))
+	describe(m15_8_df_tmp)
+end
+
+# ╔═╡ b1a168eb-8091-4146-984b-b4b35baadeac
+let
+	dat_tmp = simulate_missing_cat_data(1000, α=5, cat_probability=0.8, missing_rate=0.01)
+	@time m15_8_df_tmp = DataFrame(sample(m15_8(dat_tmp...), NUTS(), 2000))
+	describe(m15_8_df_tmp)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -276,6 +1040,7 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 DrWatson = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+LogExpFunctions = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
@@ -292,6 +1057,7 @@ Dagitty = "~0.0.1"
 DataFrames = "~1.7.0"
 Distributions = "~0.25.112"
 DrWatson = "~2.18.0"
+LogExpFunctions = "~0.3.28"
 PlutoUI = "~0.7.23"
 StatisticalRethinking = "~4.9.0"
 StatisticalRethinkingPlots = "~1.1.0"
@@ -304,9 +1070,9 @@ Turing = "~0.34.1"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.0"
+julia_version = "1.11.1"
 manifest_format = "2.0"
-project_hash = "78029ffee3697bc144aa4df652bc6b1a38ea9dd2"
+project_hash = "def81fe3ecd1a6b1ca683632e5b2257388210659"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "eea5d80188827b35333801ef97a40c2ed653b081"
@@ -3335,9 +4101,102 @@ version = "1.4.1+1"
 # ╠═afa91008-1df3-4953-b9f5-8c07fb0b062a
 # ╠═d89d1d6c-f1f4-4f58-85b3-5332f7258876
 # ╠═b45da2f0-4ce1-400a-994c-3d152b945b98
+# ╠═d3a88f86-3396-4dc0-815c-c5c9eafc5796
 # ╠═2e140860-f9f8-4b83-b89a-9bdeed82ece2
 # ╠═a1648f63-afe2-40aa-9521-19fc9cfc61b1
+# ╠═ca77e5a2-bc37-4059-b3c6-8afb1d4c16ac
 # ╠═47b03821-3929-4bc5-9565-10894d148d53
 # ╠═0239e606-6a62-4e25-ae94-0a104a7adbd5
+# ╠═38ee7cfe-6418-4c5c-84f8-555fc53accaa
+# ╠═665148ed-68bf-41e2-bede-016b529e882e
+# ╠═1ff3ea40-e8de-439f-84a0-41911b4086fd
+# ╠═ce077e2d-56b2-4ea3-a423-50835ad3ab39
+# ╠═ddaa556f-39fa-4098-943c-c7fab173450d
+# ╠═d29567c8-d6f4-49b6-9bb6-5fb0beb630fc
+# ╠═1381ea8f-b34d-4b89-bdba-f9a4aa6c263e
+# ╠═6a05972d-3d38-440c-bd0f-0045b3b8b282
+# ╠═ac433e9d-6c49-4e18-bbc7-dc7a5eed021d
+# ╠═35c21da2-3999-457b-b551-a311dcd3b747
+# ╠═ebb0877c-9253-4ed7-880b-0a293bf548d2
+# ╠═cd319704-6ca8-489e-9b8e-0d37896798af
+# ╠═a99f2a91-3eac-42b5-95ef-50d80c1c3d01
+# ╠═52d3e60a-b528-411b-b9ab-48d4fc421390
+# ╠═31687fbe-e3d7-443f-9d93-4fb57a542b21
+# ╠═cedb7c28-48a6-402a-a47b-cca6a225fc65
+# ╠═404b4c67-d35b-4506-b0d9-d51ad7211c96
+# ╠═0a6ee610-5fe1-4027-8eda-cb962678d115
+# ╠═4761e866-cafb-4b79-bb6c-cb459d1a8e33
+# ╠═c3b2a87a-2e8d-4fd0-b5cb-95a53e351b39
+# ╠═b1782452-5a0a-4e82-be7c-ef489f42bcee
+# ╠═e7407bf8-829b-491a-8706-26806f4678c4
+# ╠═1eb53c4c-9fb4-4f45-b8c5-36ab784a620d
+# ╠═22d1dd18-67e4-4944-99f5-9b54036c1c1f
+# ╠═ef25ed7f-0f72-4134-94cf-032beff8616f
+# ╠═8fca00a8-941e-47bd-9a95-7959c75e3696
+# ╠═2999a82d-58de-49c6-8ec0-1560298a99a8
+# ╠═1e19b0c0-7f12-4d9f-a84d-36e90902c781
+# ╠═67b9c764-90f8-48b6-adc1-9e0c23a64f71
+# ╠═47722ff5-e59b-4025-9a76-2678e4fb323c
+# ╠═e95c8601-068b-494a-8aa1-c110b06a3754
+# ╠═7187c38a-2e6e-4bd0-94e4-7a20db878f5e
+# ╠═bac7a0c8-7b00-4815-8c3a-05a65ef22ac5
+# ╠═e6379931-77ad-4e95-9890-d1f23e475854
+# ╠═5a378c18-ff01-47ec-9766-d6342e993044
+# ╠═12f5055c-c0b2-4849-85c1-969d6353919c
+# ╠═c2d1cc0d-2cf5-421c-8239-51a623b6cc01
+# ╠═d6038ce7-076a-4309-ac7d-8f5513f1a9b1
+# ╠═f78c060a-8dc8-44ae-8071-eb69b57ee488
+# ╠═8232b9fc-c122-45e7-8643-0c4956f1135e
+# ╠═38068bfc-c292-4428-b414-47bd29ffa1c1
+# ╠═a867c06c-0e13-4dc5-b29e-b2f9214c5596
+# ╠═6f148b0d-e2a8-4778-ac55-8ed21c94204d
+# ╠═b534f48d-6d86-4920-815d-faf333861348
+# ╠═3afe3d4f-83f3-4986-aa4d-616ed699a05f
+# ╠═afd5610d-036d-4d69-8f39-ed92f36e9fe7
+# ╠═119e54b0-e058-4d1d-afc3-70ab1c95f5da
+# ╠═414b1d7b-2584-45c0-858f-158f3b661507
+# ╠═6024c810-f7b3-40d3-bd4a-cd5ba762ac91
+# ╠═255ace20-b8b5-4799-9be4-327c7e3963c2
+# ╠═c8a1a3c0-4ef3-4a2a-be2b-6cdf71b57592
+# ╠═f60b9f82-81c4-40ff-8e3a-54b3bd37b0a9
+# ╠═c73613f1-5d06-4eb9-a476-6b353b97e8a6
+# ╠═dba51dc4-8fba-4ba2-b113-b78a7a77df52
+# ╠═71eb6a86-faa8-4b5b-9a92-25b83e22d18d
+# ╠═aa785f0d-9d45-4e46-b5f8-f87e058afaa3
+# ╠═041b92e4-fb00-409d-a7cc-31da7307412b
+# ╠═f292f868-7179-4439-889d-8a1c18a23ec7
+# ╠═db010936-1efb-41ab-8dc0-3021d05a1cf9
+# ╠═b1007d6b-588d-4f5b-ad55-cb41bb7488fd
+# ╠═4e2149ab-315a-4267-a06d-0ad756ca7e29
+# ╠═b0b3c21d-dc55-4ad1-9023-94c79e888dcf
+# ╠═113be257-af08-44d1-896d-b77fb2891196
+# ╠═7b8b955e-6afc-4f8d-9446-df5e804df552
+# ╠═9aa30d8f-628d-49fa-9fa1-72adae90176f
+# ╠═57874713-3484-4f3f-b2c1-74beacd8af50
+# ╠═62cda784-e2fd-438c-b404-e8044e8f731d
+# ╠═7a929cb5-d7ec-4739-b654-44ef7065dd80
+# ╠═98be8b25-9957-40b3-977a-d8dec17e5e2a
+# ╠═bd0db387-504b-41b9-a699-fc7dfbbe98f3
+# ╠═4e403357-10e8-426b-9e8a-773de1bcb676
+# ╠═d35389e6-c1d3-4bb7-944f-9b3bd4069048
+# ╠═f9f7bed4-7b41-4b61-82e6-1befc272af1c
+# ╠═2657634f-9f63-4724-91b5-b69ce9cd21dd
+# ╠═6b40262b-85f1-46b8-ad0f-ef42c9424d2e
+# ╠═b8ebce52-89cf-4230-b895-ce64e66526da
+# ╠═7e483219-dbef-4a7c-a167-22a78eb77a85
+# ╠═d11fa148-ebf1-424c-b626-a958f23fceaf
+# ╠═837ff71b-2f77-4e7c-ae0a-1bf7c45b2a2b
+# ╠═beb71bee-c8d4-47fe-baff-9cb8894c060b
+# ╠═880d2f17-9c60-4ce5-894c-a8dda4032cd4
+# ╠═c2c8c208-f540-4dee-aa59-b1cf8a9e8b26
+# ╠═a85d463b-2ff7-4ff9-9174-c8a3494e1202
+# ╠═e53f3193-cef0-4b62-84ba-49639e726edd
+# ╠═1472501b-a710-40c6-98b4-d0dd723b2d65
+# ╠═6859df38-2028-43e6-b6b3-e0bfa82a1552
+# ╠═28a27cea-b3b7-408e-a75d-f98b865037db
+# ╠═e252766c-dd69-461a-b35f-79d11a3f01e6
+# ╠═b70e1bd4-8d6b-4fbd-ae14-a879e2a23014
+# ╠═fd920bea-b7b7-47f9-b3b0-b6e04a2fe9d3
+# ╠═b1a168eb-8091-4146-984b-b4b35baadeac
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
