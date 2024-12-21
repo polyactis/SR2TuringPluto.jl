@@ -936,7 +936,7 @@ md"## Code 15.29 Simulate data
 # ╔═╡ c2c8c208-f540-4dee-aa59-b1cf8a9e8b26
 """
 - cat_probability/k: probability that there is a cat in a house.
-- missing_rate/r: The probability if the presence of cat in a house is unknown. The higher the missing_rate is, the less accurate the β estimate is.
+- `missing_rate`/r: The probability if the presence of cat in a house is unknown. The higher the `missing_rate` is, the less accurate the β estimate is.
 	
 """
 function simulate_missing_cat_data(N_houses::Int; α=5, β=-2, cat_probability=0.5, missing_rate=0.2)
@@ -976,57 +976,124 @@ md"## Code 15.30 `m15_8`"
             notes[i] ~ Poisson(λ[i])
 			#Turing.@addlogprob! poislogpdf(λ[i], notes[i])	#equivalent to above ~. 
         else
-            Turing.@addlogprob! log(k) + poislogpdf(exp(α+β), notes[i])
-            Turing.@addlogprob! log(1-k) + poislogpdf(exp(α), notes[i])
+			# OR replace the following with https://discourse.julialang.org/t/how-to-logsumexp-jl/103894
+			Turing.@addlogprob! log(k* poispdf(exp(α+β), notes[i]) + (1-k)*poispdf(exp(α), notes[i]))
+
+            #Turing.@addlogprob! log(k) + poislogpdf(exp(α+β), notes[i]) #wrong
+            #Turing.@addlogprob! log(1-k) + poislogpdf(exp(α), notes[i])
+        end
+    end
+end
+
+# ╔═╡ 4655466d-15b0-462b-aced-429812b54224
+"""
+Difference vs `m15_8`: use logsumexp(log(a), log(b)) instead of log(a+b)
+"""
+@model function m15_8_1(notes, cat, RC, N)
+    α ~ Normal(0, 2)
+    β ~ Normal(0, 2) #Uniform(-10, 10) does not help.
+    k ~ Beta(2, 2)
+    λ = @. exp(α + β * cat)	# was logistic() in the original code.
+    
+    for i ∈ eachindex(cat)
+        if !RC[i]  # Cat is not missing. RC[i]==0.
+            cat[i] ~ Bernoulli(k)
+            notes[i] ~ Poisson(λ[i])
+			#Turing.@addlogprob! poislogpdf(λ[i], notes[i])	#equivalent to above ~. 
+        else
+			# OR replace the following with https://discourse.julialang.org/t/how-to-logsumexp-jl/103894
+			#Turing.@addlogprob! log(k* poispdf(exp(α+β), notes[i]) + (1-k)*poispdf(exp(α), notes[i]))
+            Turing.@addlogprob! logsumexp(log(k) + poislogpdf(exp(α+β), notes[i]), log(1-k) + poislogpdf(exp(α), notes[i]))
         end
     end
 end
 
 # ╔═╡ 1472501b-a710-40c6-98b4-d0dd723b2d65
 begin
-	dat1 = simulate_missing_cat_data(1000, cat_probability=0.5, missing_rate=0.2)
+	dat1 = simulate_missing_cat_data(1000, α=5, β=-2, cat_probability=0.5, missing_rate=0.2)
 	@time m15_8_df1 = DataFrame(sample(m15_8(dat1...), NUTS(), 2000))
 	describe(m15_8_df1)
 end
 
+# ╔═╡ 6bec91a4-7982-4d55-b207-9740265fdd76
+let
+	dat_tmp = simulate_missing_cat_data(1000, α=5, β=-2, cat_probability=0.5, missing_rate=0.2)
+	@time m15_8_1_df_tmp = DataFrame(sample(m15_8_1(dat_tmp...), NUTS(), 2000))
+	describe(m15_8_1_df_tmp)
+end
+
+# ╔═╡ 221ca713-01fd-48d1-87b6-311c466049f0
+dat1
+
 # ╔═╡ 6859df38-2028-43e6-b6b3-e0bfa82a1552
 begin
-	dat2 = simulate_missing_cat_data(1000, cat_probability=0.5, missing_rate=0.01)
+	dat2 = simulate_missing_cat_data(1000, α=5, β=-2, cat_probability=0.5, missing_rate=0.01)
 	@time m15_8_df2 = DataFrame(sample(m15_8(dat2...), NUTS(), 2000))
 	describe(m15_8_df2)
 end
 
 # ╔═╡ 28a27cea-b3b7-408e-a75d-f98b865037db
 let
-	dat3 = simulate_missing_cat_data(1000, cat_probability=0.5, missing_rate=0.001)
+	dat3 = simulate_missing_cat_data(1000, α=5, β=-2, cat_probability=0.5, missing_rate=0.001)
 	@time m15_8_df3 = DataFrame(sample(m15_8(dat3...), NUTS(), 2000))
 	describe(m15_8_df3)
 end
 
 # ╔═╡ e252766c-dd69-461a-b35f-79d11a3f01e6
 let
-	dat_tmp = simulate_missing_cat_data(1000, cat_probability=0.5, missing_rate=0.95)
+	dat_tmp = simulate_missing_cat_data(1000, α=5, β=-2, cat_probability=0.5, missing_rate=0.95)
 	@time m15_8_df_tmp = DataFrame(sample(m15_8(dat_tmp...), NUTS(), 2000))
 	describe(m15_8_df_tmp)
 end
 
+# ╔═╡ 7c12687f-286d-48ca-9a78-74e58595e7c4
+let
+	dat_tmp = simulate_missing_cat_data(1000, α=5, β=-2, cat_probability=0.5, missing_rate=0.95)
+	@time m15_8_1_df_tmp = DataFrame(sample(m15_8_1(dat_tmp...), NUTS(), 2000))
+	describe(m15_8_1_df_tmp)
+end
+
+# ╔═╡ d04d0c0e-7689-4b73-bbb6-f1d6951fdbc8
+md"### cat prob=0.8"
+
 # ╔═╡ b70e1bd4-8d6b-4fbd-ae14-a879e2a23014
 let
-	dat_tmp = simulate_missing_cat_data(1000, α=5, cat_probability=0.8, missing_rate=0.95)
+	dat_tmp = simulate_missing_cat_data(1000, α=5, β=-2, cat_probability=0.8, missing_rate=0.95)
+	@time m15_8_df_tmp = DataFrame(sample(m15_8(dat_tmp...), NUTS(), 2000))
+	describe(m15_8_df_tmp)
+end
+
+# ╔═╡ fb6b9455-374b-4d9a-b119-df795a00e906
+let
+	dat_tmp = simulate_missing_cat_data(1000, α=5, β=-2, cat_probability=0.8, missing_rate=0.75)
+	@time m15_8_df_tmp = DataFrame(sample(m15_8(dat_tmp...), NUTS(), 2000))
+	describe(m15_8_df_tmp)
+end
+
+# ╔═╡ 7e7a5225-acb3-465c-b534-d99f33234f74
+let
+	dat_tmp = simulate_missing_cat_data(1000, α=5, β=-2, cat_probability=0.8, missing_rate=0.5)
+	@time m15_8_df_tmp = DataFrame(sample(m15_8(dat_tmp...), NUTS(), 2000))
+	describe(m15_8_df_tmp)
+end
+
+# ╔═╡ b49bd911-f212-4126-b913-7ea362626f4f
+let
+	dat_tmp = simulate_missing_cat_data(1000, α=5, β=-2, cat_probability=0.8, missing_rate=0.25)
 	@time m15_8_df_tmp = DataFrame(sample(m15_8(dat_tmp...), NUTS(), 2000))
 	describe(m15_8_df_tmp)
 end
 
 # ╔═╡ fd920bea-b7b7-47f9-b3b0-b6e04a2fe9d3
 let
-	dat_tmp = simulate_missing_cat_data(1000, α=5, cat_probability=0.8, missing_rate=0.05)
+	dat_tmp = simulate_missing_cat_data(1000, α=5, β=-2, cat_probability=0.8, missing_rate=0.05)
 	@time m15_8_df_tmp = DataFrame(sample(m15_8(dat_tmp...), NUTS(), 2000))
 	describe(m15_8_df_tmp)
 end
 
 # ╔═╡ b1a168eb-8091-4146-984b-b4b35baadeac
 let
-	dat_tmp = simulate_missing_cat_data(1000, α=5, cat_probability=0.8, missing_rate=0.01)
+	dat_tmp = simulate_missing_cat_data(1000, α=5, β=-2, cat_probability=0.8, missing_rate=0.01)
 	@time m15_8_df_tmp = DataFrame(sample(m15_8(dat_tmp...), NUTS(), 2000))
 	describe(m15_8_df_tmp)
 end
@@ -4191,11 +4258,19 @@ version = "1.4.1+1"
 # ╠═c2c8c208-f540-4dee-aa59-b1cf8a9e8b26
 # ╠═a85d463b-2ff7-4ff9-9174-c8a3494e1202
 # ╠═e53f3193-cef0-4b62-84ba-49639e726edd
+# ╠═4655466d-15b0-462b-aced-429812b54224
 # ╠═1472501b-a710-40c6-98b4-d0dd723b2d65
+# ╠═221ca713-01fd-48d1-87b6-311c466049f0
+# ╠═6bec91a4-7982-4d55-b207-9740265fdd76
 # ╠═6859df38-2028-43e6-b6b3-e0bfa82a1552
 # ╠═28a27cea-b3b7-408e-a75d-f98b865037db
 # ╠═e252766c-dd69-461a-b35f-79d11a3f01e6
+# ╠═7c12687f-286d-48ca-9a78-74e58595e7c4
+# ╠═d04d0c0e-7689-4b73-bbb6-f1d6951fdbc8
 # ╠═b70e1bd4-8d6b-4fbd-ae14-a879e2a23014
+# ╠═fb6b9455-374b-4d9a-b119-df795a00e906
+# ╠═7e7a5225-acb3-465c-b534-d99f33234f74
+# ╠═b49bd911-f212-4126-b913-7ea362626f4f
 # ╠═fd920bea-b7b7-47f9-b3b0-b6e04a2fe9d3
 # ╠═b1a168eb-8091-4146-984b-b4b35baadeac
 # ╟─00000000-0000-0000-0000-000000000001
