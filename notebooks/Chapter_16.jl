@@ -254,7 +254,7 @@ size(d_nuts)
 describe(d_nuts)
 
 # ╔═╡ 26c3dc32-1251-4378-824f-8f1c4b705d90
-corrplot(d_nuts)
+@df d_nuts corrplot(cols(2:6), seriestype=:scatter, ms=0.2, size=(950, 800), bins=30, grid=false)
 
 # ╔═╡ f51acae0-3d47-45e4-8bb7-4b3efc9cfd76
 md"## Code 16.10 Simulation"
@@ -456,7 +456,7 @@ md"## Code 16.18 MCMC"
 # ╔═╡ d2ce9a83-00b6-4e53-9904-5eceb813519c
 begin
 	Random.seed!(1)
-	m16_5_ch = sample(lynx_hare_model(nrow(d_hare), d_hare.Lynx, d_hare.Hare), NUTS(), 4000);
+	@time m16_5_ch = sample(lynx_hare_model(nrow(d_hare), d_hare.Lynx, d_hare.Hare), NUTS(), 4000);
 	m16_5_df = DataFrame(m16_5_ch)
 end
 
