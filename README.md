@@ -1,3 +1,5 @@
+2025/2/1 Yu S. Huang: Modified/adapted/added hands-on code. Added code for Chap 15&16, which was missing from the original [SR2TuringPluto.jl](https://github.com/StatisticalRethinkingJulia/SR2TuringPluto.jl).
+
 ## Purpose of SR2TuringPluto.jl
 
 
