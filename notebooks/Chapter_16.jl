@@ -395,11 +395,11 @@ md"## Code 16.16 Simulate the number of pelts given trapping rates"
 # ╔═╡ a9c70503-fe2c-4956-834d-1aadc2c99d5e
 let
 	N = 10_000
-Ht = 10_000
-p = rand(Beta(2, 18), N)
-h = [rand(Binomial(Ht, pv)) for pv in p]
-
-density(h ./ 1000, xlab="thousand of pelts", lw=2)
+	Ht = 10_000
+	p = rand(Beta(2, 18), N)
+	h = [rand(Binomial(Ht, pv)) for pv in p]
+	
+	density(h ./ 1000, xlab="thousand of pelts", lw=2)
 end
 
 
@@ -413,17 +413,18 @@ function lynx_hare!(dLH, LH, θ, t)
 
     dLH[1] = dL = (bl * H - ml) * L
     dLH[2] = dH = (bh - mh * L) * H
+	#return nothing # is it required?
 end
 
 # ╔═╡ e577d89b-5a25-4695-99ed-38d2e8e152a8
 @model function lynx_hare_model(N, L, H)
-    b_h ~ truncated(Normal(1, 0.5), lower=0.01, upper=100)
-    b_l ~ truncated(Normal(0.05, 0.05), lower=0.01, upper=Inf)
-    m_h ~ truncated(Normal(0.05, 0.05), lower=0.01, upper=Inf)
-    m_l ~ truncated(Normal(1, 0.5), lower=0.01, upper=Inf)
+    b_h ~ truncated(Normal(1, 0.5), lower=0.05, upper=2) #adding upper stabilized the estimates.
+    b_l ~ truncated(Normal(0.05, 0.05), lower=0.01, upper=1)
+    m_h ~ truncated(Normal(0.05, 0.05), lower=0.01, upper=1)
+    m_l ~ truncated(Normal(1, 0.5), lower=0.01, upper=2)
     
-    σ_h ~ Exponential()
-    σ_l ~ Exponential()
+    σ_h ~ InverseGamma(2,3) #Exponential() #either distribution is fine.
+    σ_l ~ InverseGamma(2,3) #Exponential()
     h₁ ~ LogNormal(log(10), 1)
     l₁ ~ LogNormal(log(10), 1)
     p_h ~ Beta(40, 200)
@@ -432,7 +433,7 @@ end
     LH₁ = [l₁, h₁]
     θ = [b_h, m_h, b_l, m_l]
     prob = ODEProblem(lynx_hare!, LH₁, N-1, θ)
-    sol = solve(prob, saveat=1)
+    sol = solve(prob, Tsit5(); p=θ, saveat=1) # Tsit5(); p=θ, was missing, but did not cause issues.
     if length(sol.u) < N
         Turing.@addlogprob! -Inf
     else
@@ -451,17 +452,21 @@ end
 end
 
 # ╔═╡ 30035ed1-eb34-4eb4-a004-8f5fa774e4ad
-md"## Code 16.18 MCMC"
+md"## Code 16.18 Solve it by MCMC"
 
 # ╔═╡ d2ce9a83-00b6-4e53-9904-5eceb813519c
 begin
 	Random.seed!(1)
-	@time m16_5_ch = sample(lynx_hare_model(nrow(d_hare), d_hare.Lynx, d_hare.Hare), NUTS(), 4000);
+	@time m16_5_ch = sample(lynx_hare_model(nrow(d_hare),
+		d_hare.Lynx, d_hare.Hare), NUTS(), MCMCSerial(), 1000, 3);
 	m16_5_df = DataFrame(m16_5_ch)
 end
 
 # ╔═╡ 4e8743fb-851a-488a-9c15-b57677ee4f52
 describe(m16_5_df)
+
+# ╔═╡ b0f22ad2-d9a1-491a-8300-582d4b06acfc
+plot(m16_5_ch)
 
 # ╔═╡ 5084564f-7d03-4dec-8946-a3de09b611ca
 md"## Code 16.19 Plot the posterior estimates of pelts"
@@ -481,10 +486,10 @@ end
 # ╔═╡ 817e5489-1e0c-4f2d-a9c1-5e6d5f082353
 
 let
-	p = plot(xlab="year", ylab="thousands of pelts")
-	plot!(d_hare.Year, d_hare.Hare, lw=1.5, c=:black, lab="Lepus")
+	p = plot(xlab="year", ylab="thousands of pelts", title="Solid lines are observed. Gray are from MCMC model." , legend=false)
+	plot!(d_hare.Year, d_hare.Hare, lw=1.5, c=:black)#, lab="Lepus Obs")
 	scatter!(d_hare.Year, d_hare.Hare, c=:black)
-	plot!(d_hare.Year, d_hare.Lynx, lw=1.5, c=:blue, lab="Lynx")
+	plot!(d_hare.Year, d_hare.Lynx, lw=1.5, c=:blue)#, lab="Lynx Obs")
 	scatter!(d_hare.Year, d_hare.Lynx, c=:blue)
 	
 	for r in first(eachrow(m16_5_df), 21)
@@ -4299,6 +4304,7 @@ version = "1.4.1+1"
 # ╠═30035ed1-eb34-4eb4-a004-8f5fa774e4ad
 # ╠═d2ce9a83-00b6-4e53-9904-5eceb813519c
 # ╠═4e8743fb-851a-488a-9c15-b57677ee4f52
+# ╠═b0f22ad2-d9a1-491a-8300-582d4b06acfc
 # ╠═5084564f-7d03-4dec-8946-a3de09b611ca
 # ╠═027f0634-9e5d-427c-8605-4a19fba72633
 # ╠═817e5489-1e0c-4f2d-a9c1-5e6d5f082353
